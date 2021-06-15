@@ -1,0 +1,25 @@
+/**
+ * #.# Styles
+ *
+ * CSS for both Frontend+Backend.
+ */
+.cloudflare-stream-block-video {
+  margin-left: 0;
+  margin-right: 0;
+  margin-bottom: 1em;
+  min-width: 50%;
+}
+.cloudflare-stream-block-video stream {
+  max-width: 100%;
+}
+@supports (position: sticky) {
+  .cloudflare-stream-block-video [poster] {
+    -o-object-fit: cover;
+       object-fit: cover;
+  }
+}
+.cloudflare-stream-block-video.aligncenter {
+  text-align: center;
+}
+
+/*# sourceMappingURL=styles.css.map */

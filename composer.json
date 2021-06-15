@@ -1,0 +1,13 @@
+{
+  "name": "restruct/silverstripe-cfstreamvideo",
+  "type": "silverstripe-vendormodule",
+  "require": {
+    "guzzlehttp/guzzle": "^7.3"
+  },
+  "extra": {},
+  "config": {
+    "process-timeout": 600
+  },
+  "prefer-stable": true,
+  "minimum-stability": "dev"
+}

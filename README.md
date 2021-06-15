@@ -1,7 +1,8 @@
 # silverstripe-cfstreamvideo
-Silverstripe Cloudfront STREAM video streaming module
+Silverstripe CloudFlareStream video streaming module
 
-**This Silverstripe module provides video uploading to– and streaming from CloudFront Stream via its API.**  
+**This Silverstripe module provides video uploading to– and streaming from CloudFlareStream via its API.**  
+
 In includes: 
 - [ ] A DB StreamVideo object to hold video data & settings, and keep track of the status
 - [ ] A StreamVideoPage object providing an upload interface (using FilePond)
