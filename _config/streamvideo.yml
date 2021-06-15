@@ -1,0 +1,12 @@
+---
+Name: streamvideo
+---
+#SilverStripe\Admin\LeftAndMain:
+#  extra_requirements_javascript:
+#    - 'restruct/silverstripe-streamvids:client/dist/styles/xxxxx.js'
+#  extra_requirements_css:
+#    - 'restruct/silverstripe-streamvids:client/dist/styles/xxxxx.css'
+
+SilverStripe\Control\Director:
+  rules:
+    'admin/streamvideo': Restruct\SilverStripe\StreamVideo\StreamVideoAdminController
