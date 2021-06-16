@@ -639,6 +639,25 @@ HTML;
         return $this->makeRequest("accounts/{$this->accountId}/stream/{$uid}/token", $data, [], "POST");
     }
 
+    /**
+     * @link https://developers.cloudflare.com/stream/viewing-videos/download-videos
+     * @param string $uid
+     * @return object
+     */
+    public function makeDownloadable($uid)
+    {
+        return $this->makeRequest("accounts/{$this->accountId}/stream/{$uid}/downloads", [], [], "POST");
+    }
+
+    /**
+     * @link https://developers.cloudflare.com/stream/viewing-videos/download-videos
+     * @param string $uid
+     * @return object
+     */
+    public function getDownloadLinks($uid)
+    {
+        return $this->makeRequest("accounts/{$this->accountId}/stream/{$uid}/downloads", [], [], "GET");
+    }
 
     /**
      * Get playback URLs of a specific video.
