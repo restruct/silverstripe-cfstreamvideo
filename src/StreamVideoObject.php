@@ -65,6 +65,10 @@ class StreamVideoObject extends DataObject
         'Video' => File::class,
     ];
 
+    private static $owns = [
+        'PosterImage', 'Video'
+    ];
+
     private static $summary_fields = [
         'StreamOrCustomPosterImage' => 'Poster Image',
         'Name' => "Name",
@@ -84,6 +88,10 @@ class StreamVideoObject extends DataObject
             $client = CloudflareStreamHelper::getApiClient();
             $client->deleteVideo($this->UID);
         }
+
+        if ($this->VideoID) {
+            $this->Video()->delete();
+        }
     }
 
     protected function onBeforeWrite()
@@ -98,6 +106,7 @@ class StreamVideoObject extends DataObject
                 $this->UID = $uid;
                 // We don't need the local asset anymore
                 $this->Video()->delete();
+                $this->VideoID = 0;
 
                 $record = $client->videoDetails($uid);
                 $this->setDataFromApi($record);

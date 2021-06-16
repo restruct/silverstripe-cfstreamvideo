@@ -474,6 +474,7 @@ class CloudflareStreamApiClient
     }
 
     /**
+     * @link https://developers.cloudflare.com/stream/viewing-videos/securing-your-stream#limiting-where-videos-can-be-embedded
      * @param string $uid
      * @param array $origins
      * @return object
@@ -487,6 +488,7 @@ class CloudflareStreamApiClient
     }
 
     /**
+     * @link https://developers.cloudflare.com/stream/viewing-videos/securing-your-stream#signed-urls
      * @param string $uid
      * @param bool $required Indicates whether the video can be a accessed only using it's UID.
      * @return object
@@ -513,7 +515,7 @@ class CloudflareStreamApiClient
      * @param bool $useSignedToken
      * @return string
      */
-    public function embedCode($uid, $addControls = false, $useSignedToken = true)
+    public function embedCode($uid)
     {
         $headers = [
             'Content-Type' => 'application/json',
@@ -533,23 +535,45 @@ class CloudflareStreamApiClient
         // We get an html code, not a json response
         $embed = $response->getBody()->getContents();
 
+        return $embed;
+    }
+
+
+    /**
+     * The iframe player is a better alternative to the embed code because
+     * it supports signed tokens
+     *
+     * @param string $uid
+     * @param array $playerOptions https://developers.cloudflare.com/stream/viewing-videos/using-the-stream-player
+     * @param boolean $useSignedToken
+     * @return string
+     */
+    public function iframePlayer($uid, $playerOptions = [], $useSignedToken = true)
+    {
+        $videoid = $uid;
         $requireSignedToken = false;
 
         // Require signed token?
         if ($useSignedToken) {
             $video = $this->videoDetails($uid);
             $requireSignedToken = $video->result->requireSignedURLs;
+            $videoid = $this->getSignedToken($uid);
         }
 
-        // Add controls attribute?
-        if ($addControls) {
-            return str_replace('src="' . $uid . '"', 'src="' . ($useSignedToken && $requireSignedToken ? $this->getSignedToken($uid) : $uid) . '" controls', $embed);
-        }
+        $opts = http_build_query($playerOptions);
 
-        // Signed URL necessary?
-        if ($useSignedToken && $requireSignedToken) {
-            return str_replace('src="' . $uid . '"', 'src="' . $this->getSignedToken($uid) . '"', $embed);
-        }
+        // The Stream player can be placed on a web page in an iframe element
+        // with the video UID (or signed URL) replacing $VIDEOID in the example below.
+        $embed = <<<HTML
+<div style="position: relative; padding-top: 56.25%;">
+<iframe
+    src="https://iframe.videodelivery.net/{$videoid}?{$opts}"
+    style="border: none; position: absolute; top: 0; height: 100%; width: 100%;"
+    allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+    allowfullscreen="true"
+></iframe>
+</div>
+HTML;
 
         return $embed;
     }
