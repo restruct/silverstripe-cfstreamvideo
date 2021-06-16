@@ -31,6 +31,7 @@ use SilverStripe\Assets\Flysystem\ProtectedAssetAdapter;
  * @property string $StatusErrors
  * @property string $StatusMessages
  * @property bool $RequireSignedURLs
+ * @property bool $AllowedOrigins
  * @property int $PosterImageID
  * @property int $VideoID
  * @method \SilverStripe\Assets\Image PosterImage()
@@ -54,6 +55,7 @@ class StreamVideoObject extends DataObject
         'StatusMessages' => DBText::class,
         // Access Controls
         'RequireSignedURLs' => DBBoolean::class,
+        'AllowedOrigins' => DBText::class,
     ];
 
     private static $indexes = [
@@ -118,7 +120,10 @@ class StreamVideoObject extends DataObject
                     $client->setVideoMeta($this->UID, "name", $this->Name);
                 }
                 if (isset($changed['RequireSignedURLs'])) {
-                    $client->setSignedURLs($this->UID, "name", $this->RequireSignedURLs);
+                    $client->setSignedURLs($this->UID, $this->RequireSignedURLs);
+                }
+                if (isset($changed['AllowedOrigins'])) {
+                    $client->setAllowedOrigins($this->UID, preg_split('/\r\n|\r|\n/', $this->AllowedOrigins));
                 }
             }
         }
@@ -208,6 +213,10 @@ class StreamVideoObject extends DataObject
             }
         }
 
+        if ($AllowedOrigins = $fields->dataFieldByName("AllowedOrigins")) {
+            $AllowedOrigins->setDescription("One item per line");
+        }
+
         /** @var UploadField $poster */
         if ($poster = $fields->dataFieldByName('PosterImage')) {
             $poster->setAllowedFileCategories('image')
@@ -281,5 +290,6 @@ class StreamVideoObject extends DataObject
         $this->ReadyToStream = $record->readyToStream;
         $this->StatusState = $record->status->state;
         $this->RequireSignedURLs = $record->requireSignedURLs;
+        $this->AllowedOrigins = implode("\n", $record->allowedOrigins);
     }
 }
