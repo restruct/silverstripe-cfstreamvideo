@@ -12,6 +12,8 @@ use SilverStripe\ORM\FieldType\DBHTMLText;
 use SilverStripe\ORM\FieldType\DBInt;
 use SilverStripe\ORM\FieldType\DBText;
 use SilverStripe\ORM\FieldType\DBVarchar;
+use SilverStripe\View\Requirements;
+use Symfony\Contracts\Service\Attribute\Required;
 
 /**
  * @property string $UID
@@ -100,6 +102,7 @@ class StreamVideoObject extends DataObject
 
     public function getCMSFields()
     {
+        Requirements::javascript("restruct/silverstripe-cfstreamvideo: javascript/utils.js");
         $fields = parent::getCMSFields();
 
         /** @var UploadField $poster */
@@ -108,6 +111,9 @@ class StreamVideoObject extends DataObject
                 ->setFolderName('video-poster-imgs')
                 ->setAllowedMaxFileNumber(1);
         }
+
+        $fields->addFieldToTab("Root.Main", new LiteralField("ShortCodeDemo", "<h2>Shortcode</h2><pre style=\"cursor:pointer;padding:1em;background:#fff\" onclick=\"copyToClipboard(this.innerText);jQuery.noticeAdd({text:'Copied to clipboard'})\">[cloudflare_stream,uid={$this->UID}]</pre>"));
+        $fields->addFieldToTab("Root.Main", new LiteralField("ShortCodeDemoHelp", "<p><em>Click on shortcode to copy to clipboard</em></p>"));
 
         if (isset($_GET['debug'])) {
             $apiDetails = json_encode(CloudflareStreamHelper::getApiClient()->videoDetails($this->UID), JSON_PRETTY_PRINT);

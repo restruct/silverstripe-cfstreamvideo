@@ -4,7 +4,12 @@
   "require": {
     "guzzlehttp/guzzle": "^7.3"
   },
-  "extra": {},
+  "extra": {
+    "expose": [
+      "css",
+      "javascript"
+    ]
+  },
   "config": {
     "process-timeout": 600
   },
