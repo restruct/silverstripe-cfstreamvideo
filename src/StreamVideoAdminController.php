@@ -4,6 +4,7 @@ namespace Restruct\SilverStripe\StreamVideo;
 
 use Shortcodable\Shortcodable;
 use SilverStripe\Control\Controller;
+use SilverStripe\Control\Director;
 use SilverStripe\Core\Environment;
 use SilverStripe\Forms\DropdownField;
 use SilverStripe\Forms\FieldList;
@@ -14,8 +15,7 @@ use SilverStripe\ORM\DataObject;
 use SilverStripe\Security\Permission;
 use SilverStripe\Security\Security;
 
-class StreamVideoAdminController
-    extends Controller
+class StreamVideoAdminController extends Controller
 {
     private static $url_segment = 'streamvideo';
 
@@ -26,7 +26,7 @@ class StreamVideoAdminController
      */
     private static $allowed_actions = [
         'index' => 'CMS_ACCESS_LeftAndMain',
-//        'handleEdit' => 'CMS_ACCESS_LeftAndMain',
+        //        'handleEdit' => 'CMS_ACCESS_LeftAndMain',
         'shortcodePlaceHolder' => 'CMS_ACCESS_LeftAndMain'
     ];
 
@@ -34,14 +34,14 @@ class StreamVideoAdminController
      * @var array
      */
     private static $url_handlers = [
-//        'edit/$ShortcodeType!/$Action//$ID/$OtherID' => 'handleEdit'
+        //        'edit/$ShortcodeType!/$Action//$ID/$OtherID' => 'handleEdit'
     ];
 
     public function init()
     {
         parent::init();
 
-        if(!Permission::check('CMS_ACCESS_LeftAndMain')){
+        if (!Permission::check('CMS_ACCESS_LeftAndMain')) {
             Security::permissionFailure($this, [
                 'default' => 'You need to be logged in to access StreamVideoAdminController.',
                 'alreadyLoggedIn' => 'Insufficient permissions to access StreamVideoAdminController. If you have an alternative account with higher permission levels you may try to login with that.',
@@ -63,45 +63,67 @@ class StreamVideoAdminController
      **/
     public function index()
     {
+        $client = CloudflareStreamHelper::getApiClient();
+
+        // $result = $client->verify();
+        // echo '<pre>';print_r($result);die();
+
+        // $this->uploadTestFile();
+
+        $res = $client->listVideos();
+        echo '<pre>';
+        print_r($res);
+        die();
+
         return;
     }
 
-//    /**
-//     * Generates shortcode placeholder to display inside TinyMCE instead of the shortcode.
-//     *
-//     * @return \SilverStripe\Control\HTTPResponse|string|void
-//     */
-//    public function shortcodePlaceHolder($request)
-//    {
-//        if (!Permission::check('CMS_ACCESS_CMSMain')) {
-//            return;
-//        }
-//
-//        $classname = $request->param('ID');
-//        $id = $request->param('OtherID');
-//
-//        if (!class_exists($classname)) {
-//            return;
-//        }
-//
-//        if ($id && is_subclass_of($classname, DataObject::class)) {
-//            $object = $classname::get()->byID($id);
-//        } else {
-//            $object = singleton($classname);
-//        }
-//
-//        if ($object->hasMethod('getShortcodePlaceHolder')) {
-//            $attributes = null;
-//            if ($shortcode = $request->requestVar('Shortcode')) {
-//                $shortcode = str_replace("\xEF\xBB\xBF", '', $shortcode); //remove BOM inside string on cursor position...
-//                $shortcodeData = singleton('\Silverstripe\Shortcodable\ShortcodableParser')->the_shortcodes([], $shortcode);
-//                if (isset($shortcodeData[0])) {
-//                    $attributes = $shortcodeData[0]['atts'];
-//                }
-//            }
-//
-//            $link = $object->getShortcodePlaceholder($attributes);
-//            return $this->redirect($link);
-//        }
-//    }
+    protected function uploadTestFile()
+    {
+        $client = CloudflareStreamHelper::getApiClient();
+        $filepath = Director::baseFolder() . '/sample-mp4-file.mp4';
+        $result = $client->upload($filepath);
+        echo '<pre>';
+        print_r($result);
+        die();
+    }
+
+    //    /**
+    //     * Generates shortcode placeholder to display inside TinyMCE instead of the shortcode.
+    //     *
+    //     * @return \SilverStripe\Control\HTTPResponse|string|void
+    //     */
+    //    public function shortcodePlaceHolder($request)
+    //    {
+    //        if (!Permission::check('CMS_ACCESS_CMSMain')) {
+    //            return;
+    //        }
+    //
+    //        $classname = $request->param('ID');
+    //        $id = $request->param('OtherID');
+    //
+    //        if (!class_exists($classname)) {
+    //            return;
+    //        }
+    //
+    //        if ($id && is_subclass_of($classname, DataObject::class)) {
+    //            $object = $classname::get()->byID($id);
+    //        } else {
+    //            $object = singleton($classname);
+    //        }
+    //
+    //        if ($object->hasMethod('getShortcodePlaceHolder')) {
+    //            $attributes = null;
+    //            if ($shortcode = $request->requestVar('Shortcode')) {
+    //                $shortcode = str_replace("\xEF\xBB\xBF", '', $shortcode); //remove BOM inside string on cursor position...
+    //                $shortcodeData = singleton('\Silverstripe\Shortcodable\ShortcodableParser')->the_shortcodes([], $shortcode);
+    //                if (isset($shortcodeData[0])) {
+    //                    $attributes = $shortcodeData[0]['atts'];
+    //                }
+    //            }
+    //
+    //            $link = $object->getShortcodePlaceholder($attributes);
+    //            return $this->redirect($link);
+    //        }
+    //    }
 }

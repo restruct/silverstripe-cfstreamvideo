@@ -1,7 +1,8 @@
 # silverstripe-cfstreamvideo
-Silverstripe Cloudfront STREAM video streaming module
+Silverstripe CloudFlareStream video streaming module
 
-**This Silverstripe module provides video uploading to– and streaming from CloudFront Stream via its API.**  
+**This Silverstripe module provides video uploading to– and streaming from CloudFlareStream via its API.**  
+
 In includes: 
 - [ ] A DB StreamVideo object to hold video data & settings, and keep track of the status
 - [ ] A StreamVideoPage object providing an upload interface (using FilePond)
@@ -29,6 +30,7 @@ In includes:
 
 ### REFS:
 - [Stream API docs](https://developers.cloudflare.com/stream/)
-- [Wordpress Stream module (esp. API class)](/z_wpplugin/src/inc/class-cloudflare-stream-api.php)
+- This module: [Listing of most required API calls](/API_REQS_NOTES)
+- This module: [Wordpress Stream module (esp. API class)](/z_wpplugin/src/inc/class-cloudflare-stream-api.php)
 - [Laravel CloudFlareStream](https://github.com/afloeter/laravel-cloudflare-stream/blob/master/src/CloudflareStream.php)
 - Earlier [Restruct HTML5 movies/media module](https://github.com/micschk/silverstripe-html5-media/blob/master/code/TranscodeJob.php) may contain some reusable parts like status polling job (but we probably could do with just checking the status eg from 'canView()' or so...)
