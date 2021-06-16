@@ -29,6 +29,7 @@ class StreamVideoAdminController extends Controller
     private static $allowed_actions = [
         'index' => 'CMS_ACCESS_LeftAndMain',
         'sync_from_api' => 'CMS_ACCESS_LeftAndMain',
+        'refresh_video_statuses' => 'CMS_ACCESS_LeftAndMain',
         'verify_token' => 'CMS_ACCESS_LeftAndMain',
         'generate_signing_key' => 'CMS_ACCESS_LeftAndMain',
         //        'handleEdit' => 'CMS_ACCESS_LeftAndMain',
@@ -71,6 +72,13 @@ class StreamVideoAdminController extends Controller
         echo '<pre>';
         print_r($result);
         die();
+    }
+
+    public function refresh_video_statuses()
+    {
+        foreach (StreamVideoObject::get()->exclude('StatusState', 'ready') as $vid) {
+            $vid->refreshDataFromApi();
+        }
     }
 
     /**

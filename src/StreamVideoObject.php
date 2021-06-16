@@ -111,7 +111,7 @@ class StreamVideoObject extends DataObject
                 $this->VideoID = 0;
 
                 $record = $client->videoDetails($uid);
-                $this->setDataFromApi($record);
+                $this->setDataFromApi($record->result);
             }
         } elseif ($this->UID) {
             $changed = $this->getChangedFields(true, self::CHANGE_VALUE);
@@ -126,6 +126,20 @@ class StreamVideoObject extends DataObject
                     $client->setAllowedOrigins($this->UID, preg_split('/\r\n|\r|\n/', $this->AllowedOrigins));
                 }
             }
+        }
+    }
+
+    public function refreshDataFromApi($write = true)
+    {
+        if (!$this->UID) {
+            return;
+        }
+
+        $client = CloudflareStreamHelper::getApiClient();
+        $record = $client->videoDetails($this->UID);
+        $this->setDataFromApi($record->result);
+        if ($write) {
+            $this->write();
         }
     }
 
