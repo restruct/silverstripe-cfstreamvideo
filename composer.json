@@ -2,7 +2,8 @@
   "name": "restruct/silverstripe-cfstreamvideo",
   "type": "silverstripe-vendormodule",
   "require": {
-    "guzzlehttp/guzzle": "^7.3"
+    "guzzlehttp/guzzle": "^7.3",
+    "firebase/php-jwt": "^5.2"
   },
   "extra": {
     "expose": [

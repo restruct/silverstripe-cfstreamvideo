@@ -2,6 +2,7 @@
 
 namespace Restruct\SilverStripe\StreamVideo;
 
+use SilverStripe\Control\Director;
 use SilverStripe\Core\Environment;
 
 /**
@@ -41,6 +42,11 @@ class CloudflareStreamHelper
         return Environment::getEnv('APP_CFSTREAM_API_KEY');
     }
 
+    public static function getLimitOrigins()
+    {
+        return Environment::getEnv('APP_CFSTREAM_LIMIT_ORIGINS');
+    }
+
     public static function getSigningKey()
     {
         return Environment::getEnv('APP_CFSTREAM_SIGNING_KEY_ID');
@@ -75,6 +81,17 @@ class CloudflareStreamHelper
             if (self::getApiKey()) {
                 self::$client->setEmail(self::getApiKey());
             }
+            if (self::getLimitOrigins()) {
+                if (is_bool(self::getLimitOrigins())) {
+                    self::$client->setDefaultAllowedOrigins([Director::baseURL()]);
+                } else {
+                    self::$client->setDefaultAllowedOrigins(explode(",", self::getLimitOrigins()));
+                }
+            }
+            if (self::getSigningKey() && self::getSigningPem()) {
+                self::$client->setPrivateKeyId(self::getSigningKey());
+                self::$client->setPrivateKeyPem(self::getSigningPem());
+            }
         }
         return self::$client;
     }
@@ -85,6 +102,7 @@ class CloudflareStreamHelper
 
         $client = CloudflareStreamHelper::getApiClient();
 
+        //TODO: maybe cache this in Video object in order to avoid api calls
         return $client->embedCode($uid);
     }
 }

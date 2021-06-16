@@ -3,17 +3,22 @@
 namespace Restruct\SilverStripe\StreamVideo;
 
 // use Restruct\Silverstripe\AdminTweaks\Traits\EnforceCMSPermission;
-use SilverStripe\AssetAdmin\Forms\UploadField;
+use SilverStripe\Forms\Tab;
+use SilverStripe\Assets\File;
 use SilverStripe\Assets\Image;
-use SilverStripe\Forms\LiteralField;
+use SilverStripe\Forms\TabSet;
 use SilverStripe\ORM\DataObject;
-use SilverStripe\ORM\FieldType\DBBoolean;
-use SilverStripe\ORM\FieldType\DBHTMLText;
+use SilverStripe\Forms\FieldList;
+use SilverStripe\View\Requirements;
+use SilverStripe\Core\Config\Config;
+use SilverStripe\Forms\LiteralField;
 use SilverStripe\ORM\FieldType\DBInt;
 use SilverStripe\ORM\FieldType\DBText;
+use SilverStripe\ORM\FieldType\DBBoolean;
 use SilverStripe\ORM\FieldType\DBVarchar;
-use SilverStripe\View\Requirements;
-use Symfony\Contracts\Service\Attribute\Required;
+use SilverStripe\ORM\FieldType\DBHTMLText;
+use SilverStripe\AssetAdmin\Forms\UploadField;
+use SilverStripe\Assets\Flysystem\ProtectedAssetAdapter;
 
 /**
  * @property string $UID
@@ -26,7 +31,10 @@ use Symfony\Contracts\Service\Attribute\Required;
  * @property string $StatusErrors
  * @property string $StatusMessages
  * @property bool $RequireSignedURLs
+ * @property int $PosterImageID
+ * @property int $VideoID
  * @method \SilverStripe\Assets\Image PosterImage()
+ * @method \SilverStripe\Assets\File Video()
  */
 class StreamVideoObject extends DataObject
 {
@@ -54,6 +62,7 @@ class StreamVideoObject extends DataObject
 
     private static $has_one = [
         'PosterImage' => Image::class,
+        'Video' => File::class,
     ];
 
     private static $summary_fields = [
@@ -66,11 +75,70 @@ class StreamVideoObject extends DataObject
         "RequireSignedURLs" => "Require Signed URLs"
     ];
 
+    protected function onBeforeDelete()
+    {
+        parent::onBeforeDelete();
+
+        // Delete from api too
+        if ($this->UID) {
+            $client = CloudflareStreamHelper::getApiClient();
+            $client->deleteVideo($this->UID);
+        }
+    }
+
+    protected function onBeforeWrite()
+    {
+        parent::onBeforeWrite();
+        $client = CloudflareStreamHelper::getApiClient();
+
+        // Send to api
+        if ($this->VideoID && !$this->UID) {
+            $uid = $client->upload($this->getVideoFullPath($this->Video()));
+            if ($uid) {
+                $this->UID = $uid;
+                // We don't need the local asset anymore
+                $this->Video()->delete();
+
+                $record = $client->videoDetails($uid);
+                $this->setDataFromApi($record);
+            }
+        } elseif ($this->UID) {
+            $changed = $this->getChangedFields(true, self::CHANGE_VALUE);
+            if (!empty($changed)) {
+                if (isset($changed['Name'])) {
+                    $client->setVideoMeta($this->UID, "name", $this->Name);
+                }
+                if (isset($changed['RequireSignedURLs'])) {
+                    $client->setSignedURLs($this->UID, "name", $this->RequireSignedURLs);
+                }
+            }
+        }
+    }
+
+    public function getVideoFullPath(File $file)
+    {
+        $Filename = $file->FileFilename;
+        $Dir = dirname($Filename);
+        $Name = basename($Filename);
+
+        $Hash = substr($file->FileHash, 0, 10);
+
+        $Path = '';
+        // Is it protected? it's in the secured folders
+        if (!$file->isPublished()) {
+            $Path = Config::inst()->get(ProtectedAssetAdapter::class, 'secure_folder') . '/';
+            $Path .= $Dir . '/' . $Hash . '/' . $Name;
+        } else {
+            $Path .= $Dir . '/' . $Name;
+        }
+        return ASSETS_PATH . '/' . $Path;
+    }
+
     public function validate()
     {
         $result = parent::validate();
 
-        if (!$this->UID) {
+        if (!$this->UID && !$this->VideoID) {
             $result->addError("A video needs an UID");
         }
 
@@ -104,6 +172,32 @@ class StreamVideoObject extends DataObject
     {
         Requirements::javascript("restruct/silverstripe-cfstreamvideo: javascript/utils.js");
         $fields = parent::getCMSFields();
+        if (!$this->UID) {
+            $fields = new FieldList();
+            $fields->push(new TabSet("Root", $mainTab = new Tab("Main")));
+            $fields->push($Video = new UploadField("Video"));
+            $Video->setFolderName('video-temp');
+            $Video->setAllowedMaxFileNumber(1);
+            $Video->getValidator()->setAllowedExtensions(["mp4"]);
+            $Video->setDescription('A mp4 file of maximum ' . File::format_size($Video->getValidator()->getAllowedMaxFileSize('mp4')));
+        } else {
+            $fields->removeByName("Video");
+            $fields->makeFieldReadonly([
+                "UID",
+                "Size",
+                "PreviewURL",
+                "ThumbnailURL",
+                "ReadyToStream",
+                "StatusState",
+                "StatusErrors",
+                "StatusMessages",
+            ]);
+            if (CloudflareStreamHelper::getSigningKey()) {
+                // We can enable signed urls
+            } else {
+                $fields->makeFieldReadonly("RequireSignedURLs");
+            }
+        }
 
         /** @var UploadField $poster */
         if ($poster = $fields->dataFieldByName('PosterImage')) {
@@ -112,8 +206,10 @@ class StreamVideoObject extends DataObject
                 ->setAllowedMaxFileNumber(1);
         }
 
-        $fields->addFieldToTab("Root.Main", new LiteralField("ShortCodeDemo", "<h2>Shortcode</h2><pre style=\"cursor:pointer;padding:1em;background:#fff\" onclick=\"copyToClipboard(this.innerText);jQuery.noticeAdd({text:'Copied to clipboard'})\">[cloudflare_stream,uid={$this->UID}]</pre>"));
-        $fields->addFieldToTab("Root.Main", new LiteralField("ShortCodeDemoHelp", "<p><em>Click on shortcode to copy to clipboard</em></p>"));
+        if ($this->UID) {
+            $fields->addFieldToTab("Root.Main", new LiteralField("ShortCodeDemo", "<h2>Shortcode</h2><pre style=\"cursor:pointer;padding:1em;background:#fff\" onclick=\"copyToClipboard(this.innerText);jQuery.noticeAdd({text:'Copied to clipboard'})\">[cloudflare_stream,uid={$this->UID}]</pre>"));
+            $fields->addFieldToTab("Root.Main", new LiteralField("ShortCodeDemoHelp", "<p><em>Click on shortcode to copy to clipboard</em></p>"));
+        }
 
         if (isset($_GET['debug'])) {
             $apiDetails = json_encode(CloudflareStreamHelper::getApiClient()->videoDetails($this->UID), JSON_PRETTY_PRINT);

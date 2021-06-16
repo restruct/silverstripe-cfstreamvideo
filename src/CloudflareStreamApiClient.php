@@ -4,6 +4,7 @@ namespace Restruct\SilverStripe\StreamVideo;
 
 use Exception;
 use GuzzleHttp\Client;
+use Firebase\JWT\JWT;
 
 /**
  * @link https://api.cloudflare.com/#stream-videos-properties
@@ -22,6 +23,11 @@ class CloudflareStreamApiClient
      */
     protected $client;
 
+    /**
+     * @var array
+     */
+    protected $defaultAllowedOrigins = [];
+
     private $accountId;
 
     // when using X-Auth-Key, X-Auth-Email headers
@@ -30,6 +36,10 @@ class CloudflareStreamApiClient
 
     // when using Authorization: Bearer [token]
     private $token;
+
+    // For signing token
+    private $privateKeyId;
+    private $privateKeyPem;
 
     /**
      * Initialize client with authentication credentials.
@@ -104,6 +114,70 @@ class CloudflareStreamApiClient
     public function setToken($token)
     {
         $this->token = $token;
+        return $this;
+    }
+
+    /**
+     * Get the value of defaultAllowedOrigins
+     * @return array
+     */
+    public function getDefaultAllowedOrigins()
+    {
+        return $this->defaultAllowedOrigins;
+    }
+
+    /**
+     * Set the value of defaultAllowedOrigins
+     *
+     * @param array $defaultAllowedOrigins
+     * @return $this
+     */
+    public function setDefaultAllowedOrigins(array $defaultAllowedOrigins)
+    {
+        $this->defaultAllowedOrigins = $defaultAllowedOrigins;
+        return $this;
+    }
+
+
+    /**
+     * Get the value of privateKeyId
+     * @return mixed
+     */
+    public function getPrivateKeyId()
+    {
+        return $this->privateKeyId;
+    }
+
+    /**
+     * Set the value of privateKeyId
+     *
+     * @param mixed $privateKeyId
+     * @return $this
+     */
+    public function setPrivateKeyId($privateKeyId)
+    {
+        $this->privateKeyId = $privateKeyId;
+        return $this;
+    }
+
+    /**
+     * Get the value of privateKeyPem
+     * @return mixed
+     */
+    public function getPrivateKeyPem()
+    {
+        return $this->privateKeyPem;
+    }
+
+    /**
+     * Set the value of privateKeyPem
+     *
+     * @param mixed $privateKeyPem
+     * @return $this
+     */
+    public function setPrivateKeyPem($privateKeyPem)
+    {
+        $this->privateKeyPem = $privateKeyPem;
         return $this;
     }
 
@@ -187,21 +261,86 @@ class CloudflareStreamApiClient
     }
 
     /**
+     * Upload a video with a given filepath.
+     *
+     * @param string $filepath
+     * @param array $data
+     * @return string UID
+     */
+    public function upload($filepath, $data = [])
+    {
+        $file = fopen($filepath, 'r');
+        if (!$file) {
+            throw new Exception("Invalid file");
+        }
+
+        $filesize = filesize($filepath);
+        $filename = basename($filepath);
+
+        // Initiate a video upload using the TUS protocol. On success, server will response with status code 201 (Created) and include a 'location' header indicating where the video content should be uploaded to
+        $response = $this->post($filename, $filesize);
+
+        if (!$response) {
+            throw new Exception("Unable to initiate TUS protocol");
+        }
+
+        // Use location header (headers are arrays => use [0])
+        $resourceUrl = $response->getHeader('Location')[0];
+
+        // Once the upload has been created, the client can start to transmit the actual upload content by sending a PATCH request to the upload URL
+        // TODO: support resuming failed uploads
+        $response = $this->patch($resourceUrl, $file, $filesize);
+
+        // There is an header containing media id (headers are arrays => use [0])
+        return $response->getHeader('stream-media-id')[0];
+    }
+
+    /**
+     * Upload the file to Cloudflare Stream.
+     *
+     * @param string $resourceUrl
+     * @param resource $file fopen() pointer resource
+     * @param int $filesize
+     * @return object Guzzle Response
+     */
+    protected function patch($resourceUrl, $file, $filesize)
+    {
+        if (empty($file)) {
+            throw new Exception("Invalid file");
+        }
+
+        $headers = [
+            'Content-Length' => $filesize,
+            'Content-Type' => 'application/offset+octet-stream',
+            'Tus-Resumable' => '1.0.0',
+            'Upload-Offset' => 0,
+        ];
+        $headers = $this->getHeadersWithAuth($headers);
+
+        $response = $this->client->patch($resourceUrl, [
+            'headers' => $headers,
+            'body' => $file,
+        ]);
+
+        if (204 != $response->getStatusCode()) {
+            throw new Exception("Operation failed");
+        }
+        return $response;
+    }
+
+    /**
      * Initiate a video upload using the TUS protocol. On success, server will response with status code 201 (Created)
      * and include a 'location' header indicating where the video content should be uploaded to.
      * See https://tus.io for protocol details.
-     *
-     * Warning: it seems it's not possible to update a video afterwards, make sure to include everything
-     * https://community.cloudflare.com/t/is-it-possible-to-update-a-video-on-cloudflare-stream/266123/4
      *
      * @link https://api.cloudflare.com/#stream-videos-upload-a-video-using-a-single-http-request
      * @link https://api.cloudflare.com/#stream-videos-initiate-a-video-upload-using-tus
      * @param string $filename
      * @param int $filesize
      * @param array $data
-     * @return object
+     * @return object Guzzle Response
      */
-    public function post($filename, $filesize, $data = [])
+    protected function post($filename, $filesize, $data = [])
     {
         if (empty($filename) || empty($filesize)) {
             throw new Exception("Invalid file");
@@ -213,7 +352,19 @@ class CloudflareStreamApiClient
             'Upload-Length' => $filesize,
             'Upload-Metadata' => "filename {$filename}",
         ];
-        return $this->makeRequest("accounts/{$this->accountId}/stream", $data, $headers, "POST");
+        $headers = $this->getHeadersWithAuth($headers);
+
+        $endpoint = "accounts/{$this->accountId}/stream";
+        $uri = self::API_BASE_URL . $endpoint;
+        $response = $this->client->post($uri, [
+            'headers' => $headers
+        ]);
+
+        if (201 != $response->getStatusCode()) {
+            throw new Exception("Operation failed");
+        }
+
+        return $response;
     }
 
     /**
@@ -229,6 +380,9 @@ class CloudflareStreamApiClient
             throw new Exception("Invalid url");
         }
         $data['url'] = $url;
+        if (!empty($this->defaultAllowedOrigins) && !isset($data['allowedOrigins'])) {
+            $data['allowedOrigins'] = $this->defaultAllowedOrigins;
+        }
         return $this->makeRequest("accounts/{$this->accountId}/stream/copy", $data, [], "POST");
     }
 
@@ -262,6 +416,20 @@ class CloudflareStreamApiClient
     /**
      * @link https://api.cloudflare.com/#stream-videos-video-details
      * @param string $uid
+     * @param array $data
+     * @return object
+     */
+    public function updateVideo($uid, $data = [])
+    {
+        $headers = [
+            'Content-Type' => 'application/json',
+        ];
+        return $this->makeRequest("accounts/{$this->accountId}/stream/{$uid}", $data, $headers, "POST");
+    }
+
+    /**
+     * @link https://api.cloudflare.com/#stream-videos-video-details
+     * @param string $uid
      * @return object
      */
     public function videoDetails($uid)
@@ -270,6 +438,65 @@ class CloudflareStreamApiClient
             'Content-Type' => 'application/json',
         ];
         return $this->makeRequest("accounts/{$this->accountId}/stream/{$uid}", [], $headers);
+    }
+
+    /**
+     * @param string $uid
+     * @return array
+     */
+    public function getVideoMeta($uid)
+    {
+        return $this->videoDetails($uid)->meta;
+    }
+
+    /**
+     * @param string $uid
+     * @param string $k
+     * @param string $v
+     * @return object
+     */
+    public function setVideoMeta($uid, $k, $v)
+    {
+        $curr = $this->videoDetails($uid);
+        $meta = $curr->meta ?? [];
+        $meta[$k] = $v;
+        return $this->updateVideo($uid, ['meta' => $meta]);
+    }
+
+    /**
+     * @param string $uid
+     * @param string $v
+     * @return object
+     */
+    public function setVideoName($uid, $v)
+    {
+        return $this->setVideoMeta($uid, "name", $v);
+    }
+
+    /**
+     * @param string $uid
+     * @param array $origins
+     * @return object
+     */
+    public function setAllowedOrigins($uid, $origins)
+    {
+        $data = [
+            'allowedOrigins' => $origins
+        ];
+        return $this->makeRequest("accounts/{$this->accountId}/stream/{$uid}", $data, [], "POST");
+    }
+
+    /**
+     * @param string $uid
+     * @param bool $required Indicates whether the video can be a accessed only using it's UID.
+     * @return object
+     */
+    public function setSignedURLs($uid, $required)
+    {
+        $data = [
+            'requireSignedURLS' => (bool)$required
+        ];
+        return $this->updateVideo($uid, $data);
     }
 
     /**
@@ -282,9 +509,11 @@ class CloudflareStreamApiClient
      *
      * @link https://api.cloudflare.com/#stream-videos-embed-code-html
      * @param string $uid
+     * @param bool $addControls
+     * @param bool $useSignedToken
      * @return string
      */
-    public function embedCode($uid)
+    public function embedCode($uid, $addControls = false, $useSignedToken = true)
     {
         $headers = [
             'Content-Type' => 'application/json',
@@ -302,7 +531,27 @@ class CloudflareStreamApiClient
         }
 
         // We get an html code, not a json response
-        return $response->getBody()->getContents();
+        $embed = $response->getBody()->getContents();
+
+        $requireSignedToken = false;
+
+        // Require signed token?
+        if ($useSignedToken) {
+            $video = $this->videoDetails($uid);
+            $requireSignedToken = $video->result->requireSignedURLs;
+        }
+
+        // Add controls attribute?
+        if ($addControls) {
+            return str_replace('src="' . $uid . '"', 'src="' . ($useSignedToken && $requireSignedToken ? $this->getSignedToken($uid) : $uid) . '" controls', $embed);
+        }
+
+        // Signed URL necessary?
+        if ($useSignedToken && $requireSignedToken) {
+            return str_replace('src="' . $uid . '"', 'src="' . $this->getSignedToken($uid) . '"', $embed);
+        }
+
+        return $embed;
     }
 
     /**
@@ -350,12 +599,79 @@ class CloudflareStreamApiClient
     }
 
     /**
+     * @link https://developers.cloudflare.com/stream/viewing-videos/securing-your-stream#get-started-with-a-signing-utility
      * @link https://api.cloudflare.com/#stream-videos-create-a-signed-url-token-for-a-video
      * @param array $data id,pem,exp,nbf,downloadable,accessRules
      * @return object
      */
     public function createSignedUrl($uid, $data = [])
     {
+        if ($this->privateKeyId && !isset($data['id'])) {
+            $data['id'] = $this->privateKeyId;
+        }
+        if ($this->privateKeyPem && !isset($data['pem'])) {
+            $data['pem'] = $this->privateKeyPem;
+        }
         return $this->makeRequest("accounts/{$this->accountId}/stream/{$uid}/token", $data, [], "POST");
+    }
+
+
+    /**
+     * Get playback URLs of a specific video.
+     *
+     * @param string $uid
+     * @param bool $useSignedToken
+     * @return string
+     */
+    public function getPlaybackURLs($uid, $useSignedToken = true)
+    {
+        $video = $this->videoDetails($uid);
+
+        // Signed URL necessary?
+        if ($useSignedToken && $video->result->requireSignedURLs) {
+            // Replace uid with signed token
+            foreach ($video->result->playback as $key => $value) {
+                $video->result->playback[$key] = str_replace($uid, $this->getSignedToken($uid), $value);
+            }
+        }
+
+        // Return playback URLs
+        return json_encode($video->result->playback);
+    }
+
+    /**
+     * Get width and height of a video.
+     *
+     * @param string $uid
+     * @return string
+     */
+    public function getDimensions($uid)
+    {
+        $video = $this->videoDetails($uid);
+
+        // Return playback URLs
+        return json_encode($video->result->input);
+    }
+
+    /**
+     * Get signed token for a video.
+     *
+     * @link https://developers.cloudflare.com/stream/viewing-videos/securing-your-stream#signing-tokens-in-production
+     * @param string $uid
+     * @param int $addHours
+     * @return string
+     */
+    public function getSignedToken($uid, $addHours = 4)
+    {
+        if (empty($this->privateKeyId) || empty($this->privateKeyPem)) {
+            throw new Exception("No signing key");
+        }
+
+        $key = base64_decode($this->privateKeyPem);
+        return JWT::encode([
+            'kid' => $this->privateKeyId,
+            'sub' => $uid,
+            "exp" => time() + ($addHours * 60 * 60)
+        ], $key, 'RS256');
     }
 }
