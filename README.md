@@ -25,6 +25,7 @@ In includes:
   - [ ] Videos can be set to be 'protected' (require a [signed URL via Stream API](https://developers.cloudflare.com/stream/viewing-videos/securing-your-stream))
   - [ ] Videos can have [whitelisted (only) domains & countries](https://developers.cloudflare.com/stream/viewing-videos/securing-your-stream#signed-urls), the default/current website domain is whitelisted by default if whitelisting is active
   - [ ] The initial version allows setting/uploading a custom poster image for a video (overriding the one provided by Stream API)
+  - [ ] A later version of this module provides could allow managing signing keys from model admin (using the Stream API)
   - [ ] A later version of this module provides some way/Ui to change/select the poster image (via a Stream API call)
 - [ ] Prevent video downloading identical to [this WP module](https://cfpowertools.com/article/cloudflare-stream-wordpress-plugin-for-video-protection/) ([under the hood explanation](https://cfpowertools.com/article/cloudflare-stream-video-protection-wordpress-plugin-in-action/))
 

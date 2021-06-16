@@ -2,18 +2,20 @@
 
 namespace Restruct\SilverStripe\StreamVideo;
 
+use Exception;
+use SilverStripe\ORM\DB;
+use SilverStripe\Forms\Form;
 use Shortcodable\Shortcodable;
-use SilverStripe\Control\Controller;
+use SilverStripe\ORM\DataObject;
+use SilverStripe\Forms\FieldList;
 use SilverStripe\Control\Director;
 use SilverStripe\Core\Environment;
-use SilverStripe\Forms\DropdownField;
-use SilverStripe\Forms\FieldList;
-use SilverStripe\Forms\Form;
 use SilverStripe\Forms\FormAction;
 use SilverStripe\Forms\HeaderField;
-use SilverStripe\ORM\DataObject;
-use SilverStripe\Security\Permission;
 use SilverStripe\Security\Security;
+use SilverStripe\Control\Controller;
+use SilverStripe\Forms\DropdownField;
+use SilverStripe\Security\Permission;
 
 class StreamVideoAdminController extends Controller
 {
@@ -26,6 +28,9 @@ class StreamVideoAdminController extends Controller
      */
     private static $allowed_actions = [
         'index' => 'CMS_ACCESS_LeftAndMain',
+        'sync_from_api' => 'CMS_ACCESS_LeftAndMain',
+        'verify_token' => 'CMS_ACCESS_LeftAndMain',
+        'generate_signing_key' => 'CMS_ACCESS_LeftAndMain',
         //        'handleEdit' => 'CMS_ACCESS_LeftAndMain',
         'shortcodePlaceHolder' => 'CMS_ACCESS_LeftAndMain'
     ];
@@ -41,21 +46,13 @@ class StreamVideoAdminController extends Controller
     {
         parent::init();
 
+        // TODO: check if necessary since we use permission checks with allowed actions
         if (!Permission::check('CMS_ACCESS_LeftAndMain')) {
             Security::permissionFailure($this, [
                 'default' => 'You need to be logged in to access StreamVideoAdminController.',
                 'alreadyLoggedIn' => 'Insufficient permissions to access StreamVideoAdminController. If you have an alternative account with higher permission levels you may try to login with that.',
             ]);
         }
-
-        // Ref: get STREAM API credentials from ENV
-        Environment::getEnv('APP_CFSTREAM_API_HOST');
-        Environment::getEnv('APP_CFSTREAM_ACCOUNT_ID');
-        Environment::getEnv('APP_CFSTREAM_ACCOUNT_EMAIL');
-        Environment::getEnv('APP_CFSTREAM_API_TOKEN');
-        Environment::getEnv('APP_CFSTREAM_SIGNING_KEY_ID');
-        Environment::getEnv('APP_CFSTREAM_SIGNING_KEY_PEM');
-        Environment::getEnv('APP_CFSTREAM_SIGNING_KEY_JWK');
     }
 
     /**
@@ -63,29 +60,67 @@ class StreamVideoAdminController extends Controller
      **/
     public function index()
     {
-        $client = CloudflareStreamHelper::getApiClient();
-
-        // $result = $client->verify();
-        // echo '<pre>';print_r($result);die();
-
-        // $this->uploadTestFile();
-
-        $res = $client->listVideos();
-        echo '<pre>';
-        print_r($res);
-        die();
-
         return;
     }
 
-    protected function uploadTestFile()
+    public function verify_token()
     {
         $client = CloudflareStreamHelper::getApiClient();
-        $filepath = Director::baseFolder() . '/sample-mp4-file.mp4';
-        $result = $client->upload($filepath);
+
+        $result = $client->verifyToken();
         echo '<pre>';
         print_r($result);
         die();
+    }
+
+    /**
+     * @link https://api.cloudflare.com/#stream-signing-keys-create-a-signing-key
+     * @return void
+     */
+    public function generate_signing_key()
+    {
+        if (CloudflareStreamHelper::getSigningKey()) {
+            throw new Exception("Signing key already configured");
+        }
+        $client = CloudflareStreamHelper::getApiClient();
+
+        $result = $client->createSigningKey();
+        $key = $result->result;
+
+        $env = Director::baseFolder() . "/.env";
+        $data = <<<TEXT
+APP_CFSTREAM_SIGNING_KEY_ID="{$key->id}"
+APP_CFSTREAM_SIGNING_KEY_PEM="{$key->pem}"
+APP_CFSTREAM_SIGNING_KEY_JWK="{$key->jwk}"
+TEXT;
+        $write = file_put_contents($env, $data, FILE_APPEND);
+
+        if ($write) {
+            DB::alteration_message("Key has been added to env file");
+        } else {
+            DB::alteration_message("Failed to write env file, please add manually");
+        }
+
+        echo '<pre>';
+        print_r($result);
+        die();
+    }
+
+    public function sync_from_api()
+    {
+        $client = CloudflareStreamHelper::getApiClient();
+        $list = $client->listVideos();
+        foreach ($list->result as $result) {
+            $record = StreamVideoObject::getByUID($result->uid);
+            $operation = "Updated";
+            if (!$record) {
+                $record = new StreamVideoObject();
+                $operation = "Created";
+            }
+            $record->setDataFromApi($result);
+            $record->write();
+            DB::alteration_message("$operation record {$record->UID}");
+        }
     }
 
     //    /**

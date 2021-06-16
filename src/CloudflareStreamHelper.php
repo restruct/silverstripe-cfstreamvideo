@@ -41,6 +41,21 @@ class CloudflareStreamHelper
         return Environment::getEnv('APP_CFSTREAM_API_KEY');
     }
 
+    public static function getSigningKey()
+    {
+        return Environment::getEnv('APP_CFSTREAM_SIGNING_KEY_ID');
+    }
+
+    public static function getSigningPem()
+    {
+        return Environment::getEnv('APP_CFSTREAM_SIGNING_KEY_PEM');
+    }
+
+    public static function getSigningJwk()
+    {
+        return Environment::getEnv('APP_CFSTREAM_SIGNING_KEY_JWK');
+    }
+
     /**
      * @return CloudflareStreamApiClient
      */
