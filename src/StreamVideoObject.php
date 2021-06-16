@@ -40,8 +40,19 @@ use SilverStripe\Assets\Flysystem\ProtectedAssetAdapter;
 class StreamVideoObject extends DataObject
 {
     // use EnforceCMSPermission;
+    const STATUS_DOWNLOADING = "downloading";
+    const STATUS_QUEUED = "queued";
+    const STATUS_INPROGRESS = "inprogress";
+    const STATUS_READY = "ready";
+    const STATUS_ERROR = "error";
 
     private static $table_name = 'StreamVideoObject';
+
+    /**
+     * @config
+     * @var boolean
+     */
+    private static $keep_local_video = false;
 
     private static $db = [
         'UID' => DBVarchar::class . '(100)',
@@ -106,9 +117,12 @@ class StreamVideoObject extends DataObject
             $uid = $client->upload($this->getVideoFullPath($this->Video()));
             if ($uid) {
                 $this->UID = $uid;
-                // We don't need the local asset anymore
-                $this->Video()->delete();
-                $this->VideoID = 0;
+
+                if (!self::config()->keep_local_video) {
+                    // We don't need the local asset anymore
+                    $this->Video()->delete();
+                    $this->VideoID = 0;
+                }
 
                 $record = $client->videoDetails($uid);
                 $this->setDataFromApi($record->result);
@@ -204,7 +218,7 @@ class StreamVideoObject extends DataObject
             $fields = new FieldList();
             $fields->push(new TabSet("Root", $mainTab = new Tab("Main")));
             $fields->push($Video = new UploadField("Video"));
-            $Video->setFolderName('video-temp');
+            $Video->setFolderName('video-stream');
             $Video->setAllowedMaxFileNumber(1);
             $Video->getValidator()->setAllowedExtensions(["mp4"]);
             $Video->setDescription('A mp4 file of maximum ' . File::format_size($Video->getValidator()->getAllowedMaxFileSize('mp4')));
