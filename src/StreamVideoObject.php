@@ -3,6 +3,8 @@
 namespace Restruct\SilverStripe\StreamVideo;
 
 // use Restruct\Silverstripe\AdminTweaks\Traits\EnforceCMSPermission;
+
+use LeKoala\FilePond\FilePondField;
 use SilverStripe\Forms\Tab;
 use SilverStripe\Assets\File;
 use SilverStripe\Assets\Image;
@@ -217,7 +219,12 @@ class StreamVideoObject extends DataObject
         if (!$this->UID) {
             $fields = new FieldList();
             $fields->push(new TabSet("Root", $mainTab = new Tab("Main")));
-            $fields->push($Video = new UploadField("Video"));
+
+            if (class_exists(FilePondField::class)) {
+                $fields->push($Video = new FilePondField("Video"));
+            } else {
+                $fields->push($Video = new UploadField("Video"));
+            }
             $Video->setFolderName('video-stream');
             $Video->setAllowedMaxFileNumber(1);
             $Video->getValidator()->setAllowedExtensions(["mp4"]);

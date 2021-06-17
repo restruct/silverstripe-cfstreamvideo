@@ -1,6 +1,6 @@
 <?php
 
-use Restruct\SilverStripe\StreamVideo\CloudflareStreamHelper;
+use Restruct\SilverStripe\StreamVideo\CloudflareStreamShortcode;
 use SilverStripe\View\Parsers\ShortcodeParser;
 
-ShortcodeParser::get('default')->register('cloudflare_stream', [CloudflareStreamHelper::class, 'cloudflare_stream']);
+ShortcodeParser::get('default')->register('cloudflare_stream', [CloudflareStreamShortcode::class, 'cloudflare_stream']);

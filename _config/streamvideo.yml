@@ -10,3 +10,12 @@ Name: streamvideo
 SilverStripe\Control\Director:
   rules:
     'admin/streamvideo': Restruct\SilverStripe\StreamVideo\StreamVideoAdminController
+---
+name: streamvideo_shortcodables
+Only:
+  classexists: Shortcodable\Shortcodable
+---
+Shortcodable\Shortcodable:
+  shortcodable_classes:
+    - Restruct\SilverStripe\StreamVideo\CloudflareStreamShortcode
+---
