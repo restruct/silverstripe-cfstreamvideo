@@ -95,31 +95,4 @@ class CloudflareStreamHelper
         }
         return self::$client;
     }
-
-    /**
-     * Arguments are forwarded to the iframe player
-     * @link https://developers.cloudflare.com/stream/viewing-videos/using-the-stream-player#basic-options
-     * @return string
-     */
-    public static function cloudflare_stream($arguments, $content = null, $parser = null)
-    {
-        $uid = $arguments["uid"];
-        unset($arguments['uid']);
-
-        $client = CloudflareStreamHelper::getApiClient();
-
-        $video = StreamVideoObject::getByUID($uid);
-        if (!$video) {
-            return;
-        }
-
-        $opts = $arguments;
-        // we can set the custom poster
-        if ($video->PosterImageID) {
-            $opts['poster'] = $video->PosterImage()->getAbsoluteURL();
-        }
-
-        // return $client->embedCode($uid);
-        return $client->iframePlayer($uid, $opts);
-    }
 }

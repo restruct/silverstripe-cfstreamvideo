@@ -56,6 +56,18 @@ class StreamVideoObject extends DataObject
      */
     private static $keep_local_video = false;
 
+    /**
+     * @config
+     * @var string
+     */
+    private static $video_folder = 'video-stream';
+
+    /**
+     * @config
+     * @var string
+     */
+    private static $poster_folder = 'video-poster-imgs';
+
     private static $db = [
         'UID' => DBVarchar::class . '(100)',
         'Name' => DBVarchar::class . '(200)',
@@ -116,13 +128,20 @@ class StreamVideoObject extends DataObject
 
         // Send to api
         if ($this->VideoID && !$this->UID) {
-            $uid = $client->upload($this->getVideoFullPath($this->Video()));
+            $localVideo = $this->Video();
+            $uid = $client->upload($this->getVideoFullPath($localVideo));
             if ($uid) {
                 $this->UID = $uid;
 
+                // Set name from file
+                if (!$this->Name && $localVideo->Name) {
+                    $this->Name = $localVideo->Name;
+                }
+
+                // TODO: wait until ready ?
                 if (!self::config()->keep_local_video) {
                     // We don't need the local asset anymore
-                    $this->Video()->delete();
+                    $localVideo->delete();
                     $this->VideoID = 0;
                 }
 
@@ -182,7 +201,7 @@ class StreamVideoObject extends DataObject
     {
         $result = parent::validate();
 
-        if (!$this->UID && !$this->VideoID) {
+        if ($this->ID && !$this->UID && !$this->VideoID) {
             $result->addError("A video needs an UID");
         }
 
@@ -222,13 +241,14 @@ class StreamVideoObject extends DataObject
 
             if (class_exists(FilePondField::class)) {
                 $fields->push($Video = new FilePondField("Video"));
+                $Video->setChunkUploads(true);
             } else {
                 $fields->push($Video = new UploadField("Video"));
+                $Video->setDescription('A mp4 file of maximum ' . File::format_size($Video->getValidator()->getAllowedMaxFileSize('mp4')));
             }
-            $Video->setFolderName('video-stream');
+            $Video->setFolderName(self::config()->video_folder);
             $Video->setAllowedMaxFileNumber(1);
             $Video->getValidator()->setAllowedExtensions(["mp4"]);
-            $Video->setDescription('A mp4 file of maximum ' . File::format_size($Video->getValidator()->getAllowedMaxFileSize('mp4')));
         } else {
             $fields->removeByName("Video");
             $fields->makeFieldReadonly([
@@ -255,7 +275,7 @@ class StreamVideoObject extends DataObject
         /** @var UploadField $poster */
         if ($poster = $fields->dataFieldByName('PosterImage')) {
             $poster->setAllowedFileCategories('image')
-                ->setFolderName('video-poster-imgs')
+                ->setFolderName(self::config()->poster_folder)
                 ->setAllowedMaxFileNumber(1);
         }
 

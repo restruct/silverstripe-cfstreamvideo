@@ -4,18 +4,18 @@ Silverstripe CloudFlareStream video streaming module
 **This Silverstripe module provides video uploading to– and streaming from CloudFlareStream via its API.**  
 
 In includes: 
-- [ ] A DB StreamVideo object to hold video data & settings, and keep track of the status
+- [x] A DB StreamVideo object to hold video data & settings, and keep track of the status
 - [ ] A StreamVideoPage object providing an upload interface (using FilePond)
-- [ ] A StreamVideoAdminController to handle interactions in the admin section (like API interactions, providing shortcode placeholder, etc)
+- [x] A StreamVideoAdminController to handle interactions in the admin section (like API interactions, providing shortcode placeholder, etc)
 - Configurable options (on StreamVideoAdminController) / environment options:
-  - [ ] (ENV) APP_CFSTREAM_API_HOST, APP_CFSTREAM_ACCOUNT_ID, APP_CFSTREAM_ACCOUNT_EMAIL, APP_CFSTREAM_API_TOKEN
-  - [ ] (ENV) APP_CFSTREAM_SIGNING_KEY_ID, APP_CFSTREAM_SIGNING_KEY_PEM, APP_CFSTREAM_SIGNING_KEY_JWK
+  - [x] (ENV) APP_CFSTREAM_API_HOST, APP_CFSTREAM_ACCOUNT_ID, APP_CFSTREAM_ACCOUNT_EMAIL, APP_CFSTREAM_API_TOKEN
+  - [x] (ENV) APP_CFSTREAM_SIGNING_KEY_ID, APP_CFSTREAM_SIGNING_KEY_PEM, APP_CFSTREAM_SIGNING_KEY_JWK
   - [ ] (StreamVideoAdminController::config()) $signed_url_buffer
 - The initial version of this module:
-  - [ ] (1) saves uploaded vids locally, 
-  - [ ] (2) posts an API request to copy the vid to Stream, 
+  - [x] (1) saves uploaded vids locally, 
+  - [x] (2) posts an API request to copy the vid to Stream, 
   - [ ] (3) polls (onload/init) the status and, 
-  - [ ] (4) (configurable) removes the local video upon status 'ready'
+  - [x] (4) (configurable) removes the local video upon status 'ready'
 - [ ] Uploads work via FilePond (as [Silverstripe in all their wisdom consider chunked uploads out of scope](https://github.com/silverstripe/silverstripe-assets/issues/421)) using chunking for large uploads ([custom filepond config](https://pqina.nl/filepond/docs/api/server/#process-chunks), based on the yet to be published Restruct Admintweaks module)
   - [ ] A later version may use [FilePond combined with TUS](https://github.com/pqina/filepond/issues/48#issuecomment-439448836) to upload large videos directly to Stream
 - [ ] A ShortCode + Placeholder are provided for easy inclusion of vids in the editor (also on 'regular' pages)
