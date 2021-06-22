@@ -10,7 +10,7 @@ In includes:
 - Configurable options (on StreamVideoAdminController) / environment options:
   - [x] (ENV) APP_CFSTREAM_API_HOST, APP_CFSTREAM_ACCOUNT_ID, APP_CFSTREAM_ACCOUNT_EMAIL, APP_CFSTREAM_API_TOKEN
   - [x] (ENV) APP_CFSTREAM_SIGNING_KEY_ID, APP_CFSTREAM_SIGNING_KEY_PEM, APP_CFSTREAM_SIGNING_KEY_JWK
-  - [ ] (StreamVideoAdminController::config()) $signed_url_buffer
+  - [x] (StreamVideoObject::config()) $signed_buffer_hours
 - The initial version of this module:
   - [x] (1) saves uploaded vids locally, 
   - [x] (2) posts an API request to copy the vid to Stream, 

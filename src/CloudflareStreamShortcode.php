@@ -43,8 +43,11 @@ class CloudflareStreamShortcode
             $ratio = $video->Height / $video->Width * 100;
         }
 
+        $RequireSignedURLs = $video->RequireSignedURLs;
+        $addHours = StreamVideoObject::config()->signed_buffer_hours;
+
         // return $client->embedCode($uid);
-        return $client->iframePlayer($uid, $opts, true, $ratio);
+        return $client->iframePlayer($uid, $opts, $RequireSignedURLs, $ratio, $addHours);
     }
 
 

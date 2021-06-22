@@ -41,6 +41,8 @@ class CloudflareStreamApiClient
     private $privateKeyId;
     private $privateKeyPem;
 
+    private $createTokenWithApi = false;
+
     /**
      * Initialize client with authentication credentials.
      *
@@ -138,7 +140,6 @@ class CloudflareStreamApiClient
         return $this;
     }
 
-
     /**
      * Get the value of privateKeyId
      * @return mixed
@@ -178,6 +179,27 @@ class CloudflareStreamApiClient
     public function setPrivateKeyPem($privateKeyPem)
     {
         $this->privateKeyPem = $privateKeyPem;
+        return $this;
+    }
+
+    /**
+     * Get the value of createTokenWithApi
+     * @return bool
+     */
+    public function getCreateTokenWithApi()
+    {
+        return $this->createTokenWithApi;
+    }
+
+    /**
+     * Set the value of createTokenWithApi
+     *
+     * @param bool $createTokenWithApi
+     * @return $this
+     */
+    public function setCreateTokenWithApi($createTokenWithApi)
+    {
+        $this->createTokenWithApi = $createTokenWithApi;
         return $this;
     }
 
@@ -547,18 +569,24 @@ class CloudflareStreamApiClient
      * @param array $playerOptions https://developers.cloudflare.com/stream/viewing-videos/using-the-stream-player
      * @param boolean $useSignedToken
      * @param float $ratio Ratio in percentage (16/9 by default)
+     * @param int $addHours
      * @return string
      */
-    public function iframePlayer($uid, $playerOptions = [], $useSignedToken = true, $ratio = null)
+    public function iframePlayer($uid, $playerOptions = [], $useSignedToken = true, $ratio = null, $addHours = 4)
     {
         $videoid = $uid;
-        $requireSignedToken = false;
 
         // Require signed token?
         if ($useSignedToken) {
-            $video = $this->videoDetails($uid);
-            $requireSignedToken = $video->result->requireSignedURLs;
-            $videoid = $this->getSignedToken($uid);
+            // eg <iframe src="https://iframe.videodelivery.net/eyJhbGciOiJSUzI1NiIsImt..."></iframe>
+            if ($this->createTokenWithApi) {
+                $response = $this->createSignedUrl($uid, [
+                    'exp' => time() + ($addHours * 60 * 60)
+                ]);
+                $videoid = $response->result->token;
+            } else {
+                $videoid = $this->getSignedToken($uid, $addHours);
+            }
         }
 
         $opts = http_build_query($playerOptions);

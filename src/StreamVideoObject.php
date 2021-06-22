@@ -58,6 +58,18 @@ class StreamVideoObject extends DataObject
 
     /**
      * @config
+     * @var boolean
+     */
+    private static $create_token_with_api = false;
+
+    /**
+     * @config
+     * @var int
+     */
+    private static $signed_buffer_hours = 4;
+
+    /**
+     * @config
      * @var string
      */
     private static $video_folder = 'video-stream';
