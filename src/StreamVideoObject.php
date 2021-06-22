@@ -172,7 +172,8 @@ class StreamVideoObject extends DataObject
                     $client->setSignedURLs($this->UID, $this->RequireSignedURLs);
                 }
                 if (isset($changed['AllowedOrigins'])) {
-                    $client->setAllowedOrigins($this->UID, preg_split('/\r\n|\r|\n/', $this->AllowedOrigins));
+                    $origins = array_filter(preg_split('/\r\n|\r|\n/', $this->AllowedOrigins));
+                    $client->setAllowedOrigins($this->UID, $origins);
                 }
             }
         }
