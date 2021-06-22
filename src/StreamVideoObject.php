@@ -231,6 +231,17 @@ class StreamVideoObject extends DataObject
         return $text;
     }
 
+    public function forTemplate()
+    {
+        if (!$this->UID && !$this->VideoID) {
+            return;
+        }
+        if ($this->UID) {
+            return CloudflareStreamHelper::getApiClient()->embedCode($this->UID);
+        }
+        return '<video src=\"' . $this->Video()->getURL() . '\" />';
+    }
+
     public function getCMSFields()
     {
         Requirements::javascript("restruct/silverstripe-cfstreamvideo: javascript/utils.js");
