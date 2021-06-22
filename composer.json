@@ -3,7 +3,8 @@
   "type": "silverstripe-vendormodule",
   "require": {
     "guzzlehttp/guzzle": "^7.3",
-    "firebase/php-jwt": "^5.2"
+    "firebase/php-jwt": "^5.2",
+    "lekoala/silverstripe-filepond": "^1.1"
   },
   "extra": {
     "expose": [
