@@ -3,6 +3,7 @@
 namespace Restruct\SilverStripe\StreamVideo;
 
 use SilverStripe\Core\Extensible;
+use SilverStripe\Forms\CheckboxField;
 use SilverStripe\Forms\DropdownField;
 use SilverStripe\Forms\FormField;
 use SilverStripe\Forms\TextField;
@@ -59,14 +60,23 @@ class CloudflareStreamShortcode
     }
 
     /**
-     *  attribute-formfields for popup
-     *
+     * attribute-formfields for popup
+     * @link https://developers.cloudflare.com/stream/viewing-videos/using-the-stream-player#basic-options
      * @return FormField[]
      */
     public function getShortcodeFields()
     {
         $arr = [];
         $arr[] = new DropdownField("uid", "Select video", $this->getShortcodableRecords());
+        $arr[] = new CheckboxField("controls", "Show controls");
+        $arr[] = new CheckboxField("autoplay", "Autoplay");
+        $arr[] = new CheckboxField("loop", "Loop");
+        $arr[] = new CheckboxField("muted", "Muted");
+        $arr[] = new DropdownField("preload", "Select video", [
+            'none' => "None (default)",
+            'auto' => "Auto",
+            'metadata' => "Metadata"
+        ]);
         return $arr;
     }
 

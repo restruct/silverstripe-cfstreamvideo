@@ -18,9 +18,9 @@ In includes:
   - [x] (4) (configurable) removes the local video upon status 'ready'
 - [ ] Uploads work via FilePond (as [Silverstripe in all their wisdom consider chunked uploads out of scope](https://github.com/silverstripe/silverstripe-assets/issues/421)) using chunking for large uploads ([custom filepond config](https://pqina.nl/filepond/docs/api/server/#process-chunks), based on the yet to be published Restruct Admintweaks module)
   - [ ] A later version may use [FilePond combined with TUS](https://github.com/pqina/filepond/issues/48#issuecomment-439448836) to upload large videos directly to Stream
-- [ ] A ShortCode + Placeholder are provided for easy inclusion of vids in the editor (also on 'regular' pages)
-  - [ ] The shortcode hooks into the yet to be published Restruct Shortcodable module
-  - [ ] The modal has a dropdown to select the video by title/name and checkboxes for options: show controls, autoplay, preload, start muted, p
+- [x] A ShortCode + Placeholder are provided for easy inclusion of vids in the editor (also on 'regular' pages)
+  - [x] The shortcode hooks into the yet to be published Restruct Shortcodable module
+  - [x] The modal has a dropdown to select the video by title/name and checkboxes for options: show controls, autoplay, preload, start muted, p
 - [ ] A ModelAdmin interface is included to view & edit existing vids, or upload new ones (without having to create a StreamVideoPage):
   - [ ] Videos can be set to be 'protected' (require a [signed URL via Stream API](https://developers.cloudflare.com/stream/viewing-videos/securing-your-stream))
   - [ ] Videos can have [whitelisted (only) domains & countries](https://developers.cloudflare.com/stream/viewing-videos/securing-your-stream#signed-urls), the default/current website domain is whitelisted by default if whitelisting is active
