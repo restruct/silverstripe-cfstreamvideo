@@ -14,7 +14,7 @@ In includes:
 - The initial version of this module:
   - [x] (1) saves uploaded vids locally, 
   - [x] (2) posts an API request to copy the vid to Stream, 
-  - [ ] (3) polls (onload/init) the status and, 
+  - [x] (3) polls (onload/init) the status upon rendering and, 
   - [x] (4) (configurable) removes the local video upon status 'ready'
 - [x] Uploads work via FilePond (as [Silverstripe in all their wisdom consider chunked uploads out of scope](https://github.com/silverstripe/silverstripe-assets/issues/421)) using chunking for large uploads ([custom filepond config](https://pqina.nl/filepond/docs/api/server/#process-chunks), based on the yet to be published Restruct Admintweaks module)
   - [ ] A later version may use [FilePond combined with TUS](https://github.com/pqina/filepond/issues/48#issuecomment-439448836) to upload large videos directly to Stream

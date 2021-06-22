@@ -32,6 +32,11 @@ class CloudflareStreamShortcode
             return;
         }
 
+        // Refresh state
+        if (!$video->IsReady()) {
+            $video->refreshDataFromApi(true);
+        }
+
         $opts = $arguments;
         // we can set the custom poster
         if ($video->PosterImageID) {
