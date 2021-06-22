@@ -546,9 +546,10 @@ class CloudflareStreamApiClient
      * @param string $uid
      * @param array $playerOptions https://developers.cloudflare.com/stream/viewing-videos/using-the-stream-player
      * @param boolean $useSignedToken
+     * @param float $ratio Ratio in percentage (16/9 by default)
      * @return string
      */
-    public function iframePlayer($uid, $playerOptions = [], $useSignedToken = true)
+    public function iframePlayer($uid, $playerOptions = [], $useSignedToken = true, $ratio = null)
     {
         $videoid = $uid;
         $requireSignedToken = false;
@@ -565,15 +566,18 @@ class CloudflareStreamApiClient
         // The Stream player can be placed on a web page in an iframe element
         // with the video UID (or signed URL) replacing $VIDEOID in the example below.
         $embed = <<<HTML
-<div style="position: relative; padding-top: 56.25%;">
 <iframe
     src="https://iframe.videodelivery.net/{$videoid}?{$opts}"
     style="border: none; position: absolute; top: 0; height: 100%; width: 100%;"
     allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
     allowfullscreen="true"
 ></iframe>
-</div>
 HTML;
+
+        if (!$ratio) {
+            $ratio = 9 / 16 * 100;
+        }
+        $embed = "<div style=\"position: relative; padding-top: {$ratio}%;\">$embed</div>";
 
         return $embed;
     }
@@ -686,14 +690,12 @@ HTML;
      * Get width and height of a video.
      *
      * @param string $uid
-     * @return string
+     * @return object
      */
     public function getDimensions($uid)
     {
         $video = $this->videoDetails($uid);
-
-        // Return playback URLs
-        return json_encode($video->result->input);
+        return $video->result->input;
     }
 
     /**

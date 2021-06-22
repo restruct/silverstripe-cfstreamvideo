@@ -81,6 +81,8 @@ class StreamVideoObject extends DataObject
         // Access Controls
         'RequireSignedURLs' => DBBoolean::class,
         'AllowedOrigins' => DBText::class,
+        'Width' => DBInt::class,
+        'Height' => DBInt::class,
     ];
 
     private static $indexes = [
@@ -161,6 +163,12 @@ class StreamVideoObject extends DataObject
                     $client->setAllowedOrigins($this->UID, preg_split('/\r\n|\r|\n/', $this->AllowedOrigins));
                 }
             }
+        }
+
+        if ($this->UID && !$this->Width) {
+            $dimensions = $client->getDimensions($this->UID);
+            $this->Width = $dimensions->width;
+            $this->Height = $dimensions->height;
         }
     }
 
@@ -357,5 +365,11 @@ class StreamVideoObject extends DataObject
         $this->StatusState = $record->status->state;
         $this->RequireSignedURLs = $record->requireSignedURLs;
         $this->AllowedOrigins = implode("\n", $record->allowedOrigins);
+
+        $input = $record->input;
+        if ($input) {
+            $this->Width = $input->width;
+            $this->Height = $input->height;
+        }
     }
 }

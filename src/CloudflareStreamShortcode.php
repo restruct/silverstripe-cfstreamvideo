@@ -38,8 +38,13 @@ class CloudflareStreamShortcode
             $opts['poster'] = $video->PosterImage()->getAbsoluteURL();
         }
 
+        $ratio = 9 / 100 * 100;
+        if ($video->Width && $video->Height) {
+            $ratio = $video->Height / $video->Width * 100;
+        }
+
         // return $client->embedCode($uid);
-        return $client->iframePlayer($uid, $opts);
+        return $client->iframePlayer($uid, $opts, true, $ratio);
     }
 
 
