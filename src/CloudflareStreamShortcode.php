@@ -6,7 +6,6 @@ use SilverStripe\Core\Extensible;
 use SilverStripe\Forms\CheckboxField;
 use SilverStripe\Forms\DropdownField;
 use SilverStripe\Forms\FormField;
-use SilverStripe\Forms\TextField;
 
 /**
  */
@@ -72,7 +71,7 @@ class CloudflareStreamShortcode
         $arr[] = new CheckboxField("autoplay", "Autoplay");
         $arr[] = new CheckboxField("loop", "Loop");
         $arr[] = new CheckboxField("muted", "Muted");
-        $arr[] = new DropdownField("preload", "Select video", [
+        $arr[] = new DropdownField("preload", "Preload", [
             'none' => "None (default)",
             'auto' => "Auto",
             'metadata' => "Metadata"
