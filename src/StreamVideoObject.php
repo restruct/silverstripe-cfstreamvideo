@@ -187,7 +187,8 @@ class StreamVideoObject extends DataObject
     /**
      * @return bool
      */
-    public function IsReady() {
+    public function IsReady()
+    {
         return $this->StatusState == self::STATUS_READY;
     }
 
