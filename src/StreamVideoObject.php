@@ -142,29 +142,13 @@ class StreamVideoObject extends DataObject
         parent::onBeforeWrite();
         $client = CloudflareStreamHelper::getApiClient();
 
-        // Send to api
-        if ($this->VideoID && !$this->UID) {
-            $localVideo = $this->Video();
-            $uid = $client->upload($this->getVideoFullPath($localVideo));
-            if ($uid) {
-                $this->UID = $uid;
+        // Set name from file
+        if ($this->VideoID && !$this->Name) {
+            $this->Name = $this->Video()->getTitle();
+        }
 
-                // Set name from file
-                if (!$this->Name && $localVideo->Name) {
-                    $this->Name = $localVideo->Name;
-                }
-
-                // TODO: wait until ready ?
-                if (!self::config()->keep_local_video) {
-                    // We don't need the local asset anymore
-                    $localVideo->delete();
-                    $this->VideoID = 0;
-                }
-
-                $record = $client->videoDetails($uid);
-                $this->setDataFromApi($record->result);
-            }
-        } elseif ($this->UID) {
+        if ($this->UID) {
+            // Update video details from our fields
             $changed = $this->getChangedFields(true, self::CHANGE_VALUE);
             if (!empty($changed)) {
                 if (isset($changed['Name'])) {
@@ -178,12 +162,54 @@ class StreamVideoObject extends DataObject
                     $client->setAllowedOrigins($this->UID, $origins);
                 }
             }
-        }
 
-        if ($this->UID && !$this->Width) {
-            $dimensions = $client->getDimensions($this->UID);
-            $this->Width = $dimensions->width;
-            $this->Height = $dimensions->height;
+            // Refresh state
+            if (!$this->IsReady()) {
+                $this->refreshDataFromApi(false);
+            }
+
+            // Check width
+            if ($this->Width <= 0) {
+                $dimensions = $client->getDimensions($this->UID);
+                $this->Width = $dimensions->width;
+                $this->Height = $dimensions->height;
+            }
+        }
+    }
+
+    protected function sendLocalVideo($write = true)
+    {
+        if (!$this->VideoID) {
+            return false;
+        }
+        $client = CloudflareStreamHelper::getApiClient();
+        $localVideo = $this->Video();
+        $uid = $client->upload($this->getVideoFullPath($localVideo));
+        if ($uid) {
+            $this->UID = $uid;
+
+            if (!self::config()->keep_local_video) {
+                // We don't need the local asset anymore
+                $localVideo->delete();
+                $this->VideoID = 0;
+            }
+
+            // Write again (won't happen twice since we got and UID now)
+            if ($write) {
+                $this->write();
+            }
+            return true;
+        }
+        return false;
+    }
+
+    protected function onAfterWrite()
+    {
+        parent::onAfterWrite();
+
+        // Send to api after write so that we are not stuck if something goes wrong
+        if ($this->VideoID && !$this->UID) {
+            $this->sendLocalVideo();
         }
     }
 
