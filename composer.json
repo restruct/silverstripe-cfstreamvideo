@@ -20,7 +20,7 @@
   }
   "autoload": {
     "psr-4": {
-      Restruct\\SilverStripe\\StreamVideo\\": "src/"
+      "Restruct\\SilverStripe\\StreamVideo\\": "src/"
     }
   },
 }
