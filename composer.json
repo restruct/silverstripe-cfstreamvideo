@@ -17,7 +17,7 @@
       "css",
       "javascript"
     ]
-  }
+  },
   "autoload": {
     "psr-4": {
       "Restruct\\SilverStripe\\StreamVideo\\": "src/"
