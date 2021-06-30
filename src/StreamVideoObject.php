@@ -4,13 +4,14 @@ namespace Restruct\SilverStripe\StreamVideo;
 
 // use Restruct\Silverstripe\AdminTweaks\Traits\EnforceCMSPermission;
 
-use LeKoala\FilePond\FilePondField;
+use Exception;
 use SilverStripe\Forms\Tab;
 use SilverStripe\Assets\File;
 use SilverStripe\Assets\Image;
 use SilverStripe\Forms\TabSet;
 use SilverStripe\ORM\DataObject;
 use SilverStripe\Forms\FieldList;
+use LeKoala\FilePond\FilePondField;
 use SilverStripe\View\Requirements;
 use SilverStripe\Core\Config\Config;
 use SilverStripe\Forms\LiteralField;
@@ -158,8 +159,7 @@ class StreamVideoObject extends DataObject
                     $client->setSignedURLs($this->UID, $this->RequireSignedURLs);
                 }
                 if (isset($changed['AllowedOrigins'])) {
-                    $origins = array_filter(preg_split('/\r\n|\r|\n/', $this->AllowedOrigins));
-                    $client->setAllowedOrigins($this->UID, $origins);
+                    $client->setAllowedOrigins($this->UID, $this->getAllowedOriginsAsArray());
                 }
             }
 
@@ -177,6 +177,14 @@ class StreamVideoObject extends DataObject
         }
     }
 
+    /**
+     * @return array
+     */
+    public function getAllowedOriginsAsArray()
+    {
+        return array_filter(preg_split('/\r\n|\r|\n/', $this->AllowedOrigins));
+    }
+
     protected function sendLocalVideo($write = true)
     {
         if (!$this->VideoID) {
@@ -184,7 +192,22 @@ class StreamVideoObject extends DataObject
         }
         $client = CloudflareStreamHelper::getApiClient();
         $localVideo = $this->Video();
-        $uid = $client->upload($this->getVideoFullPath($localVideo));
+
+        // Try to upload through fromUrl first as it might go faster
+        $data = [];
+        if ($this->AllowedOrigins) {
+            $data['allowedOrigins'] = $this->getAllowedOriginsAsArray();
+        }
+        if ($this->RequireSignedURLs) {
+            $data['requireSignedURLs'] = true;
+        }
+
+        try {
+            $response = $client->fromUrl($localVideo->getURL(), $data);
+            $uid = $response->result->uid;
+        } catch (Exception $ex) {
+            $uid = $client->upload($this->getVideoFullPath($localVideo));
+        }
         if ($uid) {
             $this->UID = $uid;
 

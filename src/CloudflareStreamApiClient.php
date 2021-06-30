@@ -285,6 +285,7 @@ class CloudflareStreamApiClient
     /**
      * Upload a video with a given filepath.
      *
+     * @link https://developers.cloudflare.com/stream/uploading-videos/upload-video-file
      * @param string $filepath
      * @param array $data
      * @return string UID
@@ -392,6 +393,7 @@ class CloudflareStreamApiClient
     /**
      * Create a resource on Cloudflare Stream from a url
      *
+     * @link https://developers.cloudflare.com/stream/uploading-videos/upload-via-link
      * @param string $url
      * @param array $data thumbnailTimestampPct, allowedOrigins, requireSignedURLs, watermark
      * @return object
