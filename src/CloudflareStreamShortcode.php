@@ -6,6 +6,7 @@ use SilverStripe\Core\Extensible;
 use SilverStripe\Forms\CheckboxField;
 use SilverStripe\Forms\DropdownField;
 use SilverStripe\Forms\FormField;
+use SilverStripe\ORM\Map;
 
 /**
  */
@@ -93,7 +94,7 @@ class CloudflareStreamShortcode
     }
 
     /**
-     * @return array
+     * @return Map
      */
     public function getShortcodableRecords()
     {
