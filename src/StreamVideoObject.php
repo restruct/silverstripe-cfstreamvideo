@@ -11,6 +11,7 @@ use SilverStripe\Assets\Image;
 use SilverStripe\Forms\TabSet;
 use SilverStripe\ORM\DataObject;
 use SilverStripe\Forms\FieldList;
+use SilverStripe\Control\Director;
 use LeKoala\FilePond\FilePondField;
 use SilverStripe\View\Requirements;
 use SilverStripe\Core\Config\Config;
@@ -203,7 +204,16 @@ class StreamVideoObject extends DataObject
         }
 
         try {
-            $response = $client->fromUrl($localVideo->getURL(), $data);
+            // use our own custom endpoint
+            if ($localVideo->getVisibility() == "protected") {
+                $response = $client->fromUrl($this->LocalLink(), $data);
+            } else {
+                // If we have a protected asset, publish it first
+                // if ($localVideo->getVisibility() == "protected") {
+                //     $localVideo->publishFile();
+                // }
+                $response = $client->fromUrl($localVideo->getURL(), $data);
+            }
             $uid = $response->result->uid;
         } catch (Exception $ex) {
             $uid = $client->upload($this->getVideoFullPath($localVideo));
@@ -281,8 +291,8 @@ class StreamVideoObject extends DataObject
     {
         $result = parent::validate();
 
-        if ($this->ID && !$this->UID && !$this->VideoID) {
-            $result->addError("A video needs an UID");
+        if ($this->ID && (!$this->UID && !$this->VideoID)) {
+            $result->addError("A video needs an UID or a local video");
         }
 
         return $result;
@@ -295,6 +305,20 @@ class StreamVideoObject extends DataObject
     public static function getByUID($uid)
     {
         return self::get()->filter('UID', $uid)->first();
+    }
+
+    /**
+     * @param string $id
+     * @return StreamVideoObject
+     */
+    public static function getByID($id)
+    {
+        return self::get()->filter('ID', $id)->first();
+    }
+
+    public function LocalLink()
+    {
+        return Director::absoluteURL('/admin/streamvideo?ID=' . $this->ID);
     }
 
     public function StreamOrCustomPosterImage($width = 100)
@@ -324,9 +348,14 @@ class StreamVideoObject extends DataObject
 
     public function getCMSFields()
     {
+        // Somehow the video is deleted but the id is still set
+        if ($this->VideoID && !$this->Video()) {
+            $this->VideoID = 0;
+        }
+
         Requirements::javascript("restruct/silverstripe-cfstreamvideo: javascript/utils.js");
         $fields = parent::getCMSFields();
-        if (!$this->UID) {
+        if (!$this->UID && !$this->VideoID) {
             $fields = new FieldList();
             $fields->push(new TabSet("Root", $mainTab = new Tab("Main")));
 
@@ -341,7 +370,9 @@ class StreamVideoObject extends DataObject
             $Video->setAllowedMaxFileNumber(1);
             $Video->getValidator()->setAllowedExtensions(["mp4"]);
         } else {
-            $fields->removeByName("Video");
+            if ($this->UID) {
+                $fields->removeByName("Video");
+            }
             $fields->makeFieldReadonly([
                 "UID",
                 "Size",
