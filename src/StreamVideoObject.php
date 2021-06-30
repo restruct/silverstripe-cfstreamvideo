@@ -34,6 +34,8 @@ use SilverStripe\Assets\Flysystem\ProtectedAssetAdapter;
  * @property string $StatusMessages
  * @property bool $RequireSignedURLs
  * @property bool $AllowedOrigins
+ * @property int $Width
+ * @property int $Height
  * @property int $PosterImageID
  * @property int $VideoID
  * @method \SilverStripe\Assets\Image PosterImage()
