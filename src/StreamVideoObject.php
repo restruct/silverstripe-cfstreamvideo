@@ -4,7 +4,7 @@ namespace Restruct\SilverStripe\StreamVideo;
 
 // use Restruct\Silverstripe\AdminTweaks\Traits\EnforceCMSPermission;
 
-use LeKoala\FilePond\FilePondField;
+use Exception;
 use SilverStripe\Forms\Tab;
 use SilverStripe\Assets\File;
 use SilverStripe\Assets\Image;
@@ -12,6 +12,8 @@ use SilverStripe\Forms\TabSet;
 use SilverStripe\Forms\TextField;
 use SilverStripe\ORM\DataObject;
 use SilverStripe\Forms\FieldList;
+use SilverStripe\Control\Director;
+use LeKoala\FilePond\FilePondField;
 use SilverStripe\View\Requirements;
 use SilverStripe\Core\Config\Config;
 use SilverStripe\Forms\LiteralField;
@@ -35,6 +37,8 @@ use SilverStripe\Assets\Flysystem\ProtectedAssetAdapter;
  * @property string $StatusMessages
  * @property bool $RequireSignedURLs
  * @property bool $AllowedOrigins
+ * @property int $Width
+ * @property int $Height
  * @property int $PosterImageID
  * @property int $VideoID
  * @method \SilverStripe\Assets\Image PosterImage()
@@ -43,13 +47,11 @@ use SilverStripe\Assets\Flysystem\ProtectedAssetAdapter;
 class StreamVideoObject extends DataObject
 {
     // use EnforceCMSPermission;
-    const STATUS_DOWNLOADING = "downloading";
-    const STATUS_QUEUED = "queued";
-    const STATUS_INPROGRESS = "inprogress";
-    const STATUS_READY = "ready";
-    const STATUS_ERROR = "error";
 
     private static $table_name = 'StreamVideoObject';
+
+    public function singular_name() { return $this->fieldLabel('SingularName'); }
+    public function plural_name() { return $this->fieldLabel('PluralName'); }
 
     /**
      * @config
@@ -67,7 +69,7 @@ class StreamVideoObject extends DataObject
      * @config
      * @var int
      */
-    private static $signed_buffer_hours = 4;
+    private static $signed_buffer_seconds = 10;
 
     /**
      * @config
@@ -163,29 +165,14 @@ class StreamVideoObject extends DataObject
         parent::onBeforeWrite();
         $client = CloudflareStreamHelper::getApiClient();
 
-        // Send to api
-        if ($this->VideoID && !$this->UID) {
-            $localVideo = $this->Video();
-            $uid = $client->upload($this->getVideoFullPath($localVideo));
-            if ($uid) {
-                $this->UID = $uid;
+        // Set name from file
+        if ($this->VideoID && !$this->Name) {
+            $this->Name = $this->Video()->getTitle();
+        }
 
-                // Set name from file
-                if (!$this->Name && $localVideo->Name) {
-                    $this->Name = $localVideo->Name;
-                }
-
-                // TODO: wait until ready ?
-                if (!self::config()->keep_local_video) {
-                    // We don't need the local asset anymore
-                    $localVideo->delete();
-                    $this->VideoID = 0;
-                }
-
-                $record = $client->videoDetails($uid);
-                $this->setDataFromApi($record->result);
-            }
-        } elseif ($this->UID) {
+        // If not first write, check if we can update some stuff from/to the CF API
+        if ($this->UID) {
+            // Update video details from our fields
             $changed = $this->getChangedFields(true, self::CHANGE_VALUE);
             if (!empty($changed)) {
                 if (isset($changed['Name'])) {
@@ -195,16 +182,89 @@ class StreamVideoObject extends DataObject
                     $client->setSignedURLs($this->UID, $this->RequireSignedURLs);
                 }
                 if (isset($changed['AllowedOrigins'])) {
-                    $origins = array_filter(preg_split('/\r\n|\r|\n/', $this->AllowedOrigins));
-                    $client->setAllowedOrigins($this->UID, $origins);
+                    $client->setAllowedOrigins($this->UID, $this->getAllowedOriginsAsArray());
                 }
             }
+
+            // Refresh state
+            if (!$this->IsReady()) {
+                $this->refreshDataFromApi(false);
+            }
+
+            // Check width
+            if ($this->Width <= 0) {
+                $dimensions = $client->getDimensions($this->UID);
+                $this->Width = $dimensions->width;
+                $this->Height = $dimensions->height;
+            }
+        }
+    }
+
+    /**
+     * @return array
+     */
+    public function getAllowedOriginsAsArray()
+    {
+        return array_filter(preg_split('/\r\n|\r|\n/', $this->AllowedOrigins));
+    }
+
+    protected function sendLocalVideo($write = true)
+    {
+        if (!$this->VideoID) {
+            return false;
+        }
+        $client = CloudflareStreamHelper::getApiClient();
+        $localVideo = $this->Video();
+
+        // Try to upload through fromUrl first as it might go faster
+        $data = [];
+        if ($this->AllowedOrigins) {
+            $data['allowedOrigins'] = $this->getAllowedOriginsAsArray();
+        }
+        if ($this->RequireSignedURLs) {
+            $data['requireSignedURLs'] = true;
         }
 
-        if ($this->UID && !$this->Width) {
-            $dimensions = $client->getDimensions($this->UID);
-            $this->Width = $dimensions->width;
-            $this->Height = $dimensions->height;
+        try {
+            // use our own custom endpoint
+            if ($localVideo->getVisibility() == "protected") {
+                $response = $client->fromUrl($this->LocalLink(), $data);
+            } else {
+                // If we have a protected asset, publish it first
+                // if ($localVideo->getVisibility() == "protected") {
+                //     $localVideo->publishFile();
+                // }
+                $response = $client->fromUrl($localVideo->getURL(), $data);
+            }
+            $uid = $response->result->uid;
+        } catch (Exception $ex) {
+            $uid = $client->upload($this->getVideoFullPath($localVideo));
+        }
+        if ($uid) {
+            $this->UID = $uid;
+
+            if (!self::config()->keep_local_video) {
+                // We don't need the local asset anymore
+                $localVideo->delete();
+                $this->VideoID = 0;
+            }
+
+            // Write again (won't happen twice since we got and UID now)
+            if ($write) {
+                $this->write();
+            }
+            return true;
+        }
+        return false;
+    }
+
+    protected function onAfterWrite()
+    {
+        parent::onAfterWrite();
+
+        // Send to api after write so that we are not stuck if something goes wrong
+        if ($this->VideoID && !$this->UID) {
+            $this->sendLocalVideo();
         }
     }
 
@@ -213,7 +273,7 @@ class StreamVideoObject extends DataObject
      */
     public function IsReady()
     {
-        return $this->StatusState == self::STATUS_READY;
+        return $this->StatusState == CloudflareStreamApiClient::STATUS_READY;
     }
 
     public function refreshDataFromApi($write = true)
@@ -253,8 +313,8 @@ class StreamVideoObject extends DataObject
     {
         $result = parent::validate();
 
-        if ($this->ID && !$this->UID && !$this->VideoID) {
-            $result->addError("A video needs an UID");
+        if ($this->ID && (!$this->UID && !$this->VideoID)) {
+            $result->addError("A video needs an UID or a local video");
         }
 
         return $result;
@@ -267,6 +327,20 @@ class StreamVideoObject extends DataObject
     public static function getByUID($uid)
     {
         return self::get()->filter('UID', $uid)->first();
+    }
+
+    /**
+     * @param string $id
+     * @return StreamVideoObject
+     */
+    public static function getByID($id)
+    {
+        return self::get()->filter('ID', $id)->first();
+    }
+
+    public function LocalLink()
+    {
+        return Director::absoluteURL('/admin/streamvideo?ID=' . $this->ID);
     }
 
     public function StreamOrCustomPosterImage($width = 100)
@@ -296,10 +370,16 @@ class StreamVideoObject extends DataObject
 
     public function getCMSFields()
     {
+        // Somehow the video is deleted but the id is still set
+        if ($this->VideoID && !$this->Video()) {
+            $this->VideoID = 0;
+        }
+
+        Requirements::javascript("restruct/silverstripe-cfstreamvideo: javascript/utils.js");
         $fields = parent::getCMSFields();
         $titleField = $fields->dataFieldByName('Title');
 
-        if (!$this->UID) {
+        if (!$this->UID && !$this->VideoID) {
             $fields = new FieldList();
             $fields->push(new TabSet("Root", $mainTab = new Tab("Main")));
             $fields->addFieldToTab('Root.Main', $titleField);
@@ -319,9 +399,10 @@ class StreamVideoObject extends DataObject
             $Video->getValidator()->setAllowedExtensions(['mp4', 'mkv', 'mov', 'avi', 'flv', 'vob', 'mxf', 'lxf', 'gxf', '3gp', 'webm', 'mpg']);
             $Video->setDescription('Most video file formats are supported (eg MP4, MKV, MOV, AVI, WebM, MPG, QuickTime, etc)');
         } else {
-            $this->refreshDataFromApi();
-
-            $fields->removeByName("Video");
+            if ($this->UID) {
+                $this->refreshDataFromApi();
+                $fields->removeByName("Video");
+            }
             $fields->makeFieldReadonly([
                 "UID",
                 "Size",
@@ -410,7 +491,7 @@ class StreamVideoObject extends DataObject
 
         $this->UID = $record->uid;
         $this->ThumbnailURL = $record->thumbnail;
-        $this->Name = $record->meta->name;
+        $this->Name = $record->meta->name ?? '';
         $this->Size = $record->size;
         $this->PreviewURL = $record->preview;
         $this->ReadyToStream = $record->readyToStream;

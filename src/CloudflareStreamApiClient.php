@@ -12,6 +12,7 @@ use Firebase\JWT\JWT;
 class CloudflareStreamApiClient
 {
     const API_BASE_URL = "https://api.cloudflare.com/client/v4/";
+
     const STATUS_DOWNLOADING = "downloading";
     const STATUS_QUEUED = "queued";
     const STATUS_INPROGRESS = "inprogress";
@@ -285,6 +286,7 @@ class CloudflareStreamApiClient
     /**
      * Upload a video with a given filepath.
      *
+     * @link https://developers.cloudflare.com/stream/uploading-videos/upload-video-file
      * @param string $filepath
      * @param array $data
      * @return string UID
@@ -392,6 +394,7 @@ class CloudflareStreamApiClient
     /**
      * Create a resource on Cloudflare Stream from a url
      *
+     * @link https://developers.cloudflare.com/stream/uploading-videos/upload-via-link
      * @param string $url
      * @param array $data thumbnailTimestampPct, allowedOrigins, requireSignedURLs, watermark
      * @return object
@@ -569,10 +572,10 @@ class CloudflareStreamApiClient
      * @param array $playerOptions https://developers.cloudflare.com/stream/viewing-videos/using-the-stream-player
      * @param boolean $useSignedToken
      * @param float $ratio Ratio in percentage (16/9 by default)
-     * @param int $addHours
+     * @param int $addBufferSeconds
      * @return string
      */
-    public function iframePlayer($uid, $playerOptions = [], $useSignedToken = true, $ratio = null, $addHours = 4)
+    public function iframePlayer($uid, $playerOptions = [], $useSignedToken = true, $ratio = null, $addBufferSeconds = 600)
     {
         $videoid = $uid;
 
@@ -581,11 +584,11 @@ class CloudflareStreamApiClient
             // eg <iframe src="https://iframe.videodelivery.net/eyJhbGciOiJSUzI1NiIsImt..."></iframe>
             if ($this->createTokenWithApi) {
                 $response = $this->createSignedUrl($uid, [
-                    'exp' => time() + ($addHours * 60 * 60)
+                    'exp' => time() + $addBufferSeconds
                 ]);
                 $videoid = $response->result->token;
             } else {
-                $videoid = $this->getSignedToken($uid, $addHours);
+                $videoid = $this->getSignedToken($uid, $addBufferSeconds);
             }
         }
 
@@ -734,7 +737,7 @@ HTML;
      * @param int $addHours
      * @return string
      */
-    public function getSignedToken($uid, $addHours = 4)
+    public function getSignedToken($uid, $addBufferSeconds = 600)
     {
         if (empty($this->privateKeyId) || empty($this->privateKeyPem)) {
             throw new Exception("No signing key");
@@ -744,7 +747,7 @@ HTML;
         return JWT::encode([
             'kid' => $this->privateKeyId,
             'sub' => $uid,
-            "exp" => time() + ($addHours * 60 * 60)
+            "exp" => time() + $addBufferSeconds
         ], $key, 'RS256');
     }
 }

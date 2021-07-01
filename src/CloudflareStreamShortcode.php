@@ -50,10 +50,10 @@ class CloudflareStreamShortcode
         }
 
         $RequireSignedURLs = $video->RequireSignedURLs;
-        $addHours = StreamVideoObject::config()->signed_buffer_hours;
+        $addBufferSeconds = StreamVideoObject::config()->signed_buffer_seconds;
 
         // return $client->embedCode($uid);
-        return $client->iframePlayer($uid, $opts, $RequireSignedURLs, $ratio, $addHours);
+        return $client->iframePlayer($uid, $opts, $RequireSignedURLs, $ratio, $addBufferSeconds);
     }
 
 
