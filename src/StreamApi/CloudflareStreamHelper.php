@@ -1,6 +1,6 @@
 <?php
 
-namespace Restruct\SilverStripe\StreamVideo;
+namespace Restruct\SilverStripe\StreamVideo\StreamApi;
 
 use SilverStripe\Control\Director;
 use SilverStripe\Core\Environment;

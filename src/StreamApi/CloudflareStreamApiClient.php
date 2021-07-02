@@ -1,10 +1,10 @@
 <?php
 
-namespace Restruct\SilverStripe\StreamVideo;
+namespace Restruct\SilverStripe\StreamVideo\StreamApi;
 
 use Exception;
-use GuzzleHttp\Client;
 use Firebase\JWT\JWT;
+use GuzzleHttp\Client;
 
 /**
  * @link https://api.cloudflare.com/#stream-videos-properties
@@ -13,6 +13,7 @@ class CloudflareStreamApiClient
 {
     const API_BASE_URL = "https://api.cloudflare.com/client/v4/";
 
+    const STATUS_SCHEDULED = "scheduled"; // custom pre-upload status
     const STATUS_DOWNLOADING = "downloading";
     const STATUS_QUEUED = "queued";
     const STATUS_INPROGRESS = "inprogress";
