@@ -514,6 +514,20 @@ class CloudflareStreamApiClient
     }
 
     /**
+     * @link https://developers.cloudflare.com/stream/viewing-videos/displaying-thumbnails#use-case-2-setting-the-default-thumbnail-timestamp-using-the-api
+     * @param string $uid
+     * @param float $timestampPct
+     * @return object
+     */
+    public function setThumbnailTimestampPct($uid, $timestampPct)
+    {
+        $data = [
+            'thumbnailTimestampPct' => $timestampPct
+        ];
+        return $this->makeRequest("accounts/{$this->accountId}/stream/{$uid}", $data, [], "POST");
+    }
+
+    /**
      * @link https://developers.cloudflare.com/stream/viewing-videos/securing-your-stream#signed-urls
      * @param string $uid
      * @param bool $required Indicates whether the video can be a accessed only using it's UID.

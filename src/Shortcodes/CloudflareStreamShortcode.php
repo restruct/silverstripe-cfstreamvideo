@@ -42,7 +42,7 @@ class CloudflareStreamShortcode
             DropdownField::create(
                 "id",
                 $vidObj->fieldLabel('sc_video'),
-                StreamVideoObject::get()->filter('ReadyToStream', true)->map("ID", "Title")
+                StreamVideoObject::get()->filter('ReadyToStream', true)->map("ID", "Name")
             ),
             CheckboxField::create("hide_controls", $vidObj->fieldLabel('sc_hide_controls')),
             CheckboxField::create("autoplay", $vidObj->fieldLabel('sc_autoplay')),
