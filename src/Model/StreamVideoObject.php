@@ -73,6 +73,12 @@ class StreamVideoObject extends DataObject
      * @config
      * @var boolean
      */
+    private static $upload_from_qjob_if_available = false;
+
+    /**
+     * @config
+     * @var boolean
+     */
     private static $create_token_with_api = false;
 
     /**
@@ -397,8 +403,11 @@ class StreamVideoObject extends DataObject
 
         // If not already scheduled for uploading from onBeforeWrite, send to api now (possibly blocking further execution until done)
         if ($this->VideoID && !$this->UID && !$this->StatusState) {
+            $jobDescrID = null;
             // If using qjobs module, create job to upload this vid (sets status to 'scheduled')
-            $jobDescrID = $this->scheduleUploadJob();
+            if(self::config()->upload_from_qjob_if_available){
+                $jobDescrID = $this->scheduleUploadJob();
+            }
             if (!$jobDescrID) {
                 // if not queued, send directly
                 $this->sendLocalVideo();
