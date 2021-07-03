@@ -202,10 +202,11 @@ class StreamVideoObject extends DataObject
                 'StatusErrors' => _t(__CLASS__.'.StatusErrors', 'Errors'),
                 'StatusMessages' => _t(__CLASS__.'.StatusMessages', 'Messages'),
                 'RequireSignedURLs' => _t(__CLASS__.'.RequireSignedURLs', 'Use Signed URLs (time-bound viewing)'),
-                'SigningKeyMissing' => _t(
-                    __CLASS__.'.SigningKeyMissing',
-                    'Signing Key missing, cannot creaet signed URLs. <a href="{generate_signing_key_link}" target="_blank">Generate one</a> (ADMINs only).',
-                    [ 'generate_signing_key_link' => StreamVideoAdminController::singleton()->Link('generate_signing_key')]
+                'SigningKeyMissing' => _t(__CLASS__.'.SigningKeyMissing','Signing Key missing, cannot creaet signed URLs.'),
+                'SigningKeyAdminCreate' => _t(
+                    __CLASS__.'.SigningKeyAdminCreate',
+                    '<a href="{generate_signing_key_link}" target="_blank">Generate one</a> (ADMINs only).',
+                        [ 'generate_signing_key_link' => StreamVideoAdminController::singleton()->Link('generate_signing_key')]
                 ),
                 'AllowedOrigins' => _t(__CLASS__.'.AllowedOrigins', 'Allowed Origins'),
                 'AllowedOrigins_descr' => _t(__CLASS__.'.AllowedOrigins_descr', 'Restrict viewing to these specific domain names (one per line)'),
@@ -285,6 +286,13 @@ class StreamVideoObject extends DataObject
             } else {
                 $fields->makeFieldReadonly("RequireSignedURLs");
                 $fields->dataFieldByName('RequireSignedURLs')->setDescription($this->fieldLabel('SigningKeyMissing'));
+                if(Permission::check('ADMIN')){
+                    $fields->dataFieldByName('RequireSignedURLs')->setDescription(
+                        $this->fieldLabel('SigningKeyMissing')
+                        . ' ' . $this->fieldLabel('SigningKeyAdminCreate')
+                    );
+
+                }
             }
         }
 
@@ -408,27 +416,34 @@ class StreamVideoObject extends DataObject
         // Delete from api too
         if ($this->UID) {
             $client = CloudflareStreamHelper::getApiClient();
-            $client->deleteVideo($this->UID);
+            try {
+                $client->deleteVideo($this->UID);
+            } catch (\GuzzleHttp\Exception\ClientException $exception) {
+                // If 404, ignore (file was probably already deleted in CFStream
+                if($exception->getCode()!==404) {
+                    user_error('CFStream API ERROR: '.$exception->getMessage());
+                }
+            }
         }
-
-        if ($this->VideoID) {
+        // and local file (@TODO: should be done via $owns + cascade delete?)
+        if ($this->VideoID && $this->Video()->exists()) {
             $this->Video()->delete();
         }
     }
 
-    // @TODO: Tweak this to show a 'pending'/status message or so as long as not yet available
-    public function forTemplate()
-    {
-        if (!$this->UID && !$this->VideoID) {
-            return;
-        }
-        if ($this->UID) {
-            return CloudflareStreamHelper::getApiClient()->embedCode($this->UID);
-        }
-
-        // 'temporary' local video file?
-        return '<video src=\"' . $this->Video()->getURL() . '\" />';
-    }
+//    // @TODO: Tweak this to show a 'pending'/status message or so as long as not yet available
+//    public function forTemplate()
+//    {
+//        if (!$this->UID && !$this->VideoID) {
+//            return;
+//        }
+//        if ($this->UID) {
+//            return CloudflareStreamHelper::getApiClient()->embedCode($this->UID);
+//        }
+//
+//        // 'temporary' local video file?
+//        return '<video src=\"' . $this->Video()->getURL() . '\" />';
+//    }
 
     //
     // HELPERS
@@ -528,8 +543,15 @@ class StreamVideoObject extends DataObject
         }
 
         $client = CloudflareStreamHelper::getApiClient();
-        $record = $client->videoDetails($this->UID);
-        $this->setDataFromApi($record->result);
+        try {
+            $responseData = $client->videoDetails($this->UID);
+        } catch (\GuzzleHttp\Exception\ClientException $exception) {
+            // If 404, just return (file was probably already deleted in CFStream
+            if($exception->getCode()===404) { return; }
+            user_error('CFStream API ERROR: '.$exception->getMessage());
+        }
+
+        $this->setDataFromApi($responseData->result);
         if ($write) {
             $this->write();
         }
@@ -582,7 +604,7 @@ class StreamVideoObject extends DataObject
     public function PreviewImageSvg($previewHeight = 36, $convertPosterToDataUri=false)
     {
         $heightToWidthFactor = $this->Height && $this->Width ? $this->Width / $this->Height : 16 / 9; // default to 16:9
-        $posterURL = Director::absoluteURL( $this->PosterImageID ? $this->PosterImage()->getURL() : $this->ThumbnailURL );
+        $posterURL = Director::absoluteURL( $this->PosterImageID ? $this->PosterImage()->ScaleMaxHeight(360)->getURL() : $this->ThumbnailURL );
         // When resulting SVG will be loaded in img tag, we need to convert the image to data-uri else it will not be loaded by browsers (security measure)
         if($convertPosterToDataUri && filter_var(str_replace('_','-', $posterURL), FILTER_VALIDATE_URL)){ // filter_var doesnt like _ in domains (eg during local development)
             $posterURL = 'data: '.mime_content_type($posterURL).';base64,'.base64_encode(file_get_contents($posterURL));
