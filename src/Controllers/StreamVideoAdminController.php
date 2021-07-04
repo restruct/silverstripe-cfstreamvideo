@@ -25,45 +25,45 @@ class StreamVideoAdminController
         'verify_token' => 'CMS_ACCESS_LeftAndMain',
         'generate_signing_key' => 'ADMIN',
         'shortcodePlaceHolder' => 'CMS_ACCESS_LeftAndMain',
-//        'video_data' => true,
+        'video_data' => true,
     ];
 
-//    /**
-//     * Provides a way to send protected assets so that cloudflare can copy through url
-//     */
-//    public function video_data()
-//    {
-//        $ID = (int)$this->getRequest()->getVar("ID");
-//        $StreamVideo = StreamVideoObject::get()->byID($ID);
-//        if (!$StreamVideo) {
-//            return $this->httpError(404, "No object");
-//        }
-//        if (!$StreamVideo->VideoID) {
-//            return $this->httpError(404, "No video ID");
-//        }
-//        if ($StreamVideo->IsReady()) {
-//            return $this->httpError(404, "Already processed");
-//        }
-//
-//        // Switch to draft as the asset might not be published
-//        if (class_exists(Versioned::class) && Versioned::get_stage() !== Versioned::DRAFT) {
-//            Versioned::set_stage(Versioned::DRAFT);
-//        }
-//
-//        // Send video data through as stream
-//        $LocalVideo = $StreamVideo->Video();
-//        if (!$LocalVideo && !$LocalVideo->ID) {
-//            return $this->httpError(404, "No video");
-//        }
-//        $stream = $LocalVideo->getStream();
-//        if (!$stream) {
-//            return $this->httpError(404, "No stream");
-//        }
-//        header("Content-Type: video/mp4");
-//        header('Accept-Ranges: bytes');
-//        fpassthru($stream);
-//        exit();
-//    }
+    /**
+     * Provides a way to send protected assets so that cloudflare can copy through url
+     */
+    public function video_data()
+    {
+        $ID = (int)$this->getRequest()->getVar("ID");
+        $StreamVideo = StreamVideoObject::get()->byID($ID);
+        if (!$StreamVideo) {
+            return $this->httpError(404, "No object");
+        }
+        if (!$StreamVideo->VideoID) {
+            return $this->httpError(404, "No video ID");
+        }
+        if ($StreamVideo->IsReady()) {
+            return $this->httpError(404, "Already processed");
+        }
+
+        // Switch to draft as the asset might not be published
+        if (class_exists(Versioned::class) && Versioned::get_stage() !== Versioned::DRAFT) {
+            Versioned::set_stage(Versioned::DRAFT);
+        }
+
+        // Send video data through as stream
+        $LocalVideo = $StreamVideo->Video();
+        if (!$LocalVideo && !$LocalVideo->ID) {
+            return $this->httpError(404, "No video");
+        }
+        $stream = $LocalVideo->getStream();
+        if (!$stream) {
+            return $this->httpError(404, "No stream");
+        }
+        header("Content-Type: video/mp4");
+        header('Accept-Ranges: bytes');
+        fpassthru($stream);
+        exit();
+    }
 
     public function verify_token()
     {

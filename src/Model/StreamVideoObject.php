@@ -15,6 +15,7 @@ use SilverStripe\Assets\Image;
 use SilverStripe\Control\Director;
 use SilverStripe\Core\ClassInfo;
 use SilverStripe\Core\Config\Config;
+use SilverStripe\Core\Convert;
 use SilverStripe\Forms\FieldList;
 use SilverStripe\Forms\LiteralField;
 use SilverStripe\Forms\Tab;
@@ -68,6 +69,12 @@ class StreamVideoObject extends DataObject
      * @var boolean
      */
     private static $keep_local_video = false;
+
+    /**
+     * @config What to do with the video record in CFStream upon deleting the local record
+     * @var string options: keep = do nothing, rename = prepend 'DELETED: ' to video name, delete = remove in Stream right away
+     */
+    private static $stream_video_action_on_delete_record = 'mark';
 
     /**
      * @config
@@ -149,7 +156,10 @@ class StreamVideoObject extends DataObject
     ];
 
     private static $indexes = [
-        "UID" => true,
+        "UID" => [
+            'type' => 'unique',
+            'columns' => ['UID'],
+        ],
     ];
 
     private static $has_one = [
@@ -176,8 +186,9 @@ class StreamVideoObject extends DataObject
                 'SingularName' => _t(__CLASS__.'.SingularName', 'Stream Video'),
                 'PluralName' => _t(__CLASS__.'.PluralName', 'Stream Videos'),
 //                'Title' => _t(__CLASS__.'.Title', 'Video Title'),
-                'StreamOrCustomPosterImage' => _t(__CLASS__.'.StreamOrCustomPosterImage', 'Video Preview Image'),
+                'PreviewImageSvg' => _t(__CLASS__.'.PreviewImageSvg', 'Video Preview Image'),
                 'UID' => _t(__CLASS__.'.UID', 'Stream Video ID (UID)'),
+                'AddExistingUID_descr' => _t(__CLASS__.'.AddExistingUID_descr', 'Optional: add an existing Video ID from your Stream account (instead of adding/uploading a new one)'),
                 'Name' => _t(__CLASS__.'.Name', 'Video Name'),
                 'ThumbnailTimestamp' => _t(__CLASS__.'.ThumbnailTimestamp', 'Timeframe (in seconds) to use as preview image'),
                 'ThumbnailTimestamp_descr' => _t(__CLASS__.'.ThumbnailTimestamp_descr', '(generating a new poster image may take up to 10-20 seconds, <a href="javascript:location.reload();">refresh this page</a> to see the new image)'),
@@ -237,25 +248,28 @@ class StreamVideoObject extends DataObject
             $fields->push(new TabSet("Root", $mainTab = new Tab("Main")));
 //            $fields->addFieldToTab('Root.Main', $titleField);
             $fields->addFieldToTab('Root.Main', $nameField);
-            if($this->UID){
-                $fields->addFieldToTab('Root.Details', $UIDField);
-            }
+            $fields->addFieldToTab('Root.Main', $UIDField->setDescription($this->fieldLabel('AddExistingUID_descr')));
 
             if(!$this->StatusState){
                 if (class_exists(FilePondField::class)) {
                     $fields->push($Video = new FilePondField("Video"));
-                    $Video->setChunkUploads(true);
+                    // @TODO: temp bugfix in FilePond, we need to also set maxFileSize manually for JS config (besides setAllowedMaxFileSize)
+                    $Video->addFilePondConfig('maxFileSize', Convert::memstring2bytes('1GB'));
+                    $Video->setChunkUploads(true) ;
                 } else {
                     $fields->push($Video = new UploadField("Video"));
-                    $Video->setDescription('A video file of maximum ' . File::format_size($Video->getValidator()->getAllowedMaxFileSize()));
+//                    $Video->setDescription();
                 }
                 $Video->setFolderName(self::config()->video_folder);
                 $Video->setAllowedMaxFileNumber(1);
+                $Video->getValidator()->setAllowedMaxFileSize(['*' => '1GB']);
                 // MP4, MKV, MOV, AVI, FLV, MPEG-2 TS, MPEG-2 PS, MXF, LXF, GXF, 3GP, WebM, MPG, QuickTime
                 // https://developers.cloudflare.com/stream/faq#what-input-file-formats-are-supported
     //            $Video->getValidator()->setAllowedExtensions(['mp4']);
                 $Video->getValidator()->setAllowedExtensions(['mp4', 'mkv', 'mov', 'avi', 'flv', 'vob', 'mxf', 'lxf', 'gxf', '3gp', 'webm', 'mpg']);
-                $Video->setDescription('Most video file formats are supported (eg MP4, MKV, MOV, AVI, WebM, MPG, QuickTime, etc)');
+                $Video->setDescription(
+                    'A video file of maximum ' . File::format_size($Video->getValidator()->getAllowedMaxFileSize())
+                    .', most video file formats are supported (eg MP4, MKV, MOV, AVI, WebM, MPG, QuickTime, etc)');
             }
         } else {
             if ($this->UID) {
@@ -423,7 +437,17 @@ class StreamVideoObject extends DataObject
         if ($this->UID) {
             $client = CloudflareStreamHelper::getApiClient();
             try {
-                $client->deleteVideo($this->UID);
+                switch (self::config()->get('stream_video_action_on_delete_record')){
+                    case 'mark':
+                        $client->setVideoMeta($this->UID, "name", 'DELETED: '.$this->Name);
+                        break;
+                    case 'delete':
+                        $client->deleteVideo($this->UID);
+                        break;
+                    case 'keep':
+                    default:
+                        // do nothing...
+                }
             } catch (\GuzzleHttp\Exception\ClientException $exception) {
                 // If 404, ignore (file was probably already deleted in CFStream
                 if($exception->getCode()!==404) {
@@ -607,7 +631,7 @@ class StreamVideoObject extends DataObject
 
     public function LocalLink()
     {
-        return Director::absoluteURL('/admin/streamvideo?ID=' . $this->ID);
+        return Director::absoluteURL(StreamVideoAdminController::singleton()->Link('video_data').'?ID=' . $this->ID);
     }
 
     public function PreviewImageSvg($previewHeight = 36, $convertPosterToDataUri=false)
