@@ -261,7 +261,12 @@ class StreamVideoObject extends DataObject
             }
         } else {
             if ($this->UID) {
-                $this->refreshDataFromApi();
+                $result = $this->refreshDataFromApi();
+                // Add warning
+                if (!$result) {
+                    $VideoDeletedMessage = _t(__CLASS__ . '.VideoDeletedMessage', 'The video was deleted on cloudflare servers. Save to remove UID.');
+                    $fields->insertBefore("Name", new LiteralField("AlertVideoDeleted", '<div class="message bad">' . $VideoDeletedMessage . '</div>'));
+                }
                 $fields->removeByName("Video");
             }
             $techFields = [
@@ -556,10 +561,13 @@ class StreamVideoObject extends DataObject
         return false;
     }
 
+    /**
+     * @return bool true if the data was refresh, false if not found
+     */
     public function refreshDataFromApi($write = true)
     {
         if (!$this->UID) {
-            return;
+            return false;
         }
 
         $client = CloudflareStreamHelper::getApiClient();
@@ -568,7 +576,9 @@ class StreamVideoObject extends DataObject
         } catch (\GuzzleHttp\Exception\ClientException $exception) {
             // If 404, just return (file was probably already deleted in CFStream)
             if ($exception->getCode() === 404) {
-                return;
+                // Remove uid
+                $this->UID = '';
+                return false;
             }
             user_error('CFStream API ERROR: ' . $exception->getMessage());
         }
@@ -577,6 +587,7 @@ class StreamVideoObject extends DataObject
         if ($write) {
             $this->write();
         }
+        return true;
     }
 
     //
