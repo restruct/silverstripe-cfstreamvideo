@@ -49,11 +49,11 @@ class CloudflareStreamShortcode
             CheckboxField::create("loop", $vidObj->fieldLabel('sc_loop')),
             CheckboxField::create("muted", $vidObj->fieldLabel('sc_muted')),
             CheckboxField::create("preload", $vidObj->fieldLabel('sc_preload')),
-//            DropdownField::create("preload", $vidObj->fieldLabel('sc_preload'), [
-//                'none' => $vidObj->fieldLabel('sc_preload_none'),
-//                'metadata' => $vidObj->fieldLabel('sc_preload_metadata'),
-//                'auto' => $vidObj->fieldLabel('sc_preload_auto'),
-//            ])
+            //            DropdownField::create("preload", $vidObj->fieldLabel('sc_preload'), [
+            //                'none' => $vidObj->fieldLabel('sc_preload_none'),
+            //                'metadata' => $vidObj->fieldLabel('sc_preload_metadata'),
+            //                'auto' => $vidObj->fieldLabel('sc_preload_auto'),
+            //            ])
         );
     }
 
@@ -69,8 +69,8 @@ class CloudflareStreamShortcode
 
         // Output image/svg data directly (any bitmap but may also be SVG)
         $response = Controller::curr()->getResponse();
-        $response->addHeader('Content-Type','image/svg+xml');
-        $response->addHeader('Vary','Accept-Encoding');
+        $response->addHeader('Content-Type', 'image/svg+xml');
+        $response->addHeader('Vary', 'Accept-Encoding');
         $response->setBody($video->PreviewImageSvg(180, true));
         $response->output();
     }
@@ -93,12 +93,12 @@ class CloudflareStreamShortcode
             $video->refreshDataFromApi(true);
         }
 
-        if(isset($opts['hide_controls'])) {
+        if (isset($opts['hide_controls'])) {
             $opts['controls'] = 0;
             unset($opts['hide_controls']);
         }
 
-        if(isset($opts['preload'])) {
+        if (isset($opts['preload'])) {
             $opts['preload'] = 'auto';
         }
 
@@ -118,5 +118,4 @@ class CloudflareStreamShortcode
         // return $client->embedCode($uid);
         return CloudflareStreamHelper::getApiClient()->iframePlayer($video->UID, $opts, $RequireSignedURLs, $ratio, $addBufferSeconds);
     }
-
 }

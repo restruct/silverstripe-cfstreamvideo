@@ -61,8 +61,14 @@ class StreamVideoObject extends DataObject
 {
     private static $table_name = 'StreamVideoObject';
 
-    public function singular_name() { return $this->fieldLabel('SingularName'); }
-    public function plural_name() { return $this->fieldLabel('PluralName'); }
+    public function singular_name()
+    {
+        return $this->fieldLabel('SingularName');
+    }
+    public function plural_name()
+    {
+        return $this->fieldLabel('PluralName');
+    }
 
     /**
      * @config
@@ -116,7 +122,7 @@ class StreamVideoObject extends DataObject
     public $ExecuteFree = 'never';
     private function scheduleUploadJob($write = true)
     {
-        if($this->StatusState || !ClassInfo::exists('Symbiote\QueuedJobs\Jobs\ScheduledExecutionJob')){
+        if ($this->StatusState || !ClassInfo::exists('Symbiote\QueuedJobs\Jobs\ScheduledExecutionJob')) {
             return false;
         }
         // using full namespaced classnames because qjobs module may not be installed (so we cannot use imports)
@@ -124,7 +130,9 @@ class StreamVideoObject extends DataObject
             new \Symbiote\QueuedJobs\Jobs\ScheduledExecutionJob($this)
         );
         $this->StatusState = CloudflareStreamApiClient::STATUS_SCHEDULED;
-        if($write) $this->write(); // triggers double write because called from onAfterWrite but only once/when $this->StatusState is not yet set
+        if ($write) {
+            $this->write(); // triggers double write because called from onAfterWrite but only once/when $this->StatusState is not yet set
+        }
 
         return $qJobDescrID;
     }
@@ -185,7 +193,7 @@ class StreamVideoObject extends DataObject
             [
                 'SingularName' => _t(__CLASS__.'.SingularName', 'Stream Video'),
                 'PluralName' => _t(__CLASS__.'.PluralName', 'Stream Videos'),
-//                'Title' => _t(__CLASS__.'.Title', 'Video Title'),
+            //                'Title' => _t(__CLASS__.'.Title', 'Video Title'),
                 'PreviewImageSvg' => _t(__CLASS__.'.PreviewImageSvg', 'Video Preview Image'),
                 'UID' => _t(__CLASS__.'.UID', 'Stream Video ID (UID)'),
                 'AddExistingUID_descr' => _t(__CLASS__.'.AddExistingUID_descr', 'Optional: add an existing Video ID from your Stream account (instead of adding/uploading a new one)'),
@@ -202,11 +210,11 @@ class StreamVideoObject extends DataObject
                 'StatusErrors' => _t(__CLASS__.'.StatusErrors', 'Errors'),
                 'StatusMessages' => _t(__CLASS__.'.StatusMessages', 'Messages'),
                 'RequireSignedURLs' => _t(__CLASS__.'.RequireSignedURLs', 'Use Signed URLs (time-bound viewing)'),
-                'SigningKeyMissing' => _t(__CLASS__.'.SigningKeyMissing','Signing Key missing, cannot creaet signed URLs.'),
+                'SigningKeyMissing' => _t(__CLASS__.'.SigningKeyMissing', 'Signing Key missing, cannot creaet signed URLs.'),
                 'SigningKeyAdminCreate' => _t(
                     __CLASS__.'.SigningKeyAdminCreate',
                     '<a href="{generate_signing_key_link}" target="_blank">Generate one</a> (ADMINs only).',
-                        [ 'generate_signing_key_link' => StreamVideoAdminController::singleton()->Link('generate_signing_key')]
+                    [ 'generate_signing_key_link' => StreamVideoAdminController::singleton()->Link('generate_signing_key')]
                 ),
                 'AllowedOrigins' => _t(__CLASS__.'.AllowedOrigins', 'Allowed Origins'),
                 'AllowedOrigins_descr' => _t(__CLASS__.'.AllowedOrigins_descr', 'Restrict viewing to these specific domain names (one per line)'),
@@ -250,7 +258,7 @@ class StreamVideoObject extends DataObject
             $fields->addFieldToTab('Root.Main', $nameField);
             $fields->addFieldToTab('Root.Main', $UIDField->setDescription($this->fieldLabel('AddExistingUID_descr')));
 
-            if(!$this->StatusState){
+            if (!$this->StatusState) {
                 if (class_exists(FilePondField::class)) {
                     $fields->push($Video = new FilePondField("Video"));
                     // @TODO: temp bugfix in FilePond, we need to also set maxFileSize manually for JS config (besides setAllowedMaxFileSize)
@@ -269,7 +277,8 @@ class StreamVideoObject extends DataObject
                 $Video->getValidator()->setAllowedExtensions(['mp4', 'mkv', 'mov', 'avi', 'flv', 'vob', 'mxf', 'lxf', 'gxf', '3gp', 'webm', 'mpg']);
                 $Video->setDescription(
                     'A video file of maximum ' . File::format_size($Video->getValidator()->getAllowedMaxFileSize())
-                    .', most video file formats are supported (eg MP4, MKV, MOV, AVI, WebM, MPG, QuickTime, etc)');
+                    .', most video file formats are supported (eg MP4, MKV, MOV, AVI, WebM, MPG, QuickTime, etc)'
+                );
             }
         } else {
             if ($this->UID) {
@@ -290,7 +299,7 @@ class StreamVideoObject extends DataObject
                 "StatusErrors",
                 "StatusMessages",
             ];
-            foreach ($techFields as $fieldName){
+            foreach ($techFields as $fieldName) {
                 $fields->addFieldToTab('Root.Details', $fields->dataFieldByName($fieldName));
             }
             $fields->makeFieldReadonly($techFields);
@@ -300,12 +309,11 @@ class StreamVideoObject extends DataObject
             } else {
                 $fields->makeFieldReadonly("RequireSignedURLs");
                 $fields->dataFieldByName('RequireSignedURLs')->setDescription($this->fieldLabel('SigningKeyMissing'));
-                if(Permission::check('ADMIN')){
+                if (Permission::check('ADMIN')) {
                     $fields->dataFieldByName('RequireSignedURLs')->setDescription(
                         $this->fieldLabel('SigningKeyMissing')
                         . ' ' . $this->fieldLabel('SigningKeyAdminCreate')
                     );
-
                 }
             }
         }
@@ -419,7 +427,7 @@ class StreamVideoObject extends DataObject
         if ($this->VideoID && !$this->UID && !$this->StatusState) {
             $jobDescrID = null;
             // If using qjobs module, create job to upload this vid (sets status to 'scheduled')
-            if(self::config()->upload_from_qjob_if_available){
+            if (self::config()->upload_from_qjob_if_available) {
                 $jobDescrID = $this->scheduleUploadJob();
             }
             if (!$jobDescrID) {
@@ -437,7 +445,7 @@ class StreamVideoObject extends DataObject
         if ($this->UID) {
             $client = CloudflareStreamHelper::getApiClient();
             try {
-                switch (self::config()->get('stream_video_action_on_delete_record')){
+                switch (self::config()->get('stream_video_action_on_delete_record')) {
                     case 'mark':
                         $client->setVideoMeta($this->UID, "name", 'DELETED: '.$this->Name);
                         break;
@@ -450,7 +458,7 @@ class StreamVideoObject extends DataObject
                 }
             } catch (\GuzzleHttp\Exception\ClientException $exception) {
                 // If 404, ignore (file was probably already deleted in CFStream
-                if($exception->getCode()!==404) {
+                if ($exception->getCode()!==404) {
                     user_error('CFStream API ERROR: '.$exception->getMessage());
                 }
             }
@@ -503,7 +511,7 @@ class StreamVideoObject extends DataObject
         return $this->sendLocalVideo(true, true);
     }
 
-    protected function sendLocalVideo($write = true, $forcePOST=false)
+    protected function sendLocalVideo($write = true, $forcePOST = false)
     {
         if (!$this->VideoID) {
             user_error(self::class."::sendLocalVideo() - no video (VideoID) available for uploading to API.", E_USER_WARNING);
@@ -533,7 +541,7 @@ class StreamVideoObject extends DataObject
         // Else: try submitting a download link for the vid (which should hopefully return early and process the vid async)
         // Failing that, again fall back to POST'ing it anyway (blocking further execution until done)
         $uid = null;
-        if($forcePOST){
+        if ($forcePOST) {
             $uid = $client->upload($this->getVideoFullPath($localVideo));
         } else {
             try {
@@ -580,7 +588,9 @@ class StreamVideoObject extends DataObject
             $responseData = $client->videoDetails($this->UID);
         } catch (\GuzzleHttp\Exception\ClientException $exception) {
             // If 404, just return (file was probably already deleted in CFStream
-            if($exception->getCode()===404) { return; }
+            if ($exception->getCode()===404) {
+                return;
+            }
             user_error('CFStream API ERROR: '.$exception->getMessage());
         }
 
@@ -634,13 +644,15 @@ class StreamVideoObject extends DataObject
         return Director::absoluteURL(StreamVideoAdminController::singleton()->Link('video_data').'?ID=' . $this->ID);
     }
 
-    public function PreviewImageSvg($previewHeight = 36, $convertPosterToDataUri=false)
+    public function PreviewImageSvg($previewHeight = 36, $convertPosterToDataUri = false)
     {
         $heightToWidthFactor = $this->Height && $this->Width ? $this->Width / $this->Height : 16 / 9; // default to 16:9
-        $posterURL = $this->PosterImageID ? Director::absoluteURL( $this->PosterImage()->ScaleMaxHeight(360)->getURL() ) : $this->ThumbnailURL;
-        if($posterURL) $posterURL .= "?ts={$this->ThumbnailTimestamp}";
+        $posterURL = $this->PosterImageID ? Director::absoluteURL($this->PosterImage()->ScaleMaxHeight(360)->getURL()) : $this->ThumbnailURL;
+        if ($posterURL) {
+            $posterURL .= "?ts={$this->ThumbnailTimestamp}";
+        }
         // When resulting SVG will be loaded in img tag, we need to convert the image to data-uri else it will not be loaded by browsers (security measure)
-        if($convertPosterToDataUri && filter_var(str_replace('_','-', $posterURL), FILTER_VALIDATE_URL)){ // filter_var doesnt like _ in domains (eg during local development)
+        if ($convertPosterToDataUri && filter_var(str_replace('_', '-', $posterURL), FILTER_VALIDATE_URL)) { // filter_var doesnt like _ in domains (eg during local development)
             // mime_content_type doesnt like external files, falling back to a simpler map
 //            $posterURL = 'data: '.mime_content_type($posterURL).';base64,'.base64_encode(file_get_contents($posterURL));
             $mimetype = str_replace('jpg', 'jpeg', 'image/'.strtolower(substr($posterURL, -3)));
@@ -711,7 +723,7 @@ class StreamVideoObject extends DataObject
 
         $this->UID = $record->uid;
         $this->ThumbnailURL = $record->thumbnail;
-        if(!$this->Name) {
+        if (!$this->Name) {
             $this->Name = $record->meta->name ?? '';
         }
         $this->Size = $record->size;
@@ -722,7 +734,7 @@ class StreamVideoObject extends DataObject
         $this->AllowedOrigins = implode("\n", $record->allowedOrigins);
         $this->Duration = $record->duration ?: null;
         $this->ThumbnailTimestampPct = $record->thumbnailTimestampPct;
-        if(!$this->ThumbnailTimestamp) {
+        if (!$this->ThumbnailTimestamp) {
             $this->ThumbnailTimestamp = $record->duration && $record->thumbnailTimestampPct ? $record->duration * $record->thumbnailTimestampPct : null;
         }
 
