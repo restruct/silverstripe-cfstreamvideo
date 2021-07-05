@@ -216,6 +216,19 @@ class StreamVideoObject extends DataObject
         );
     }
 
+    /**
+     * @return string
+     */
+    public function getPosterImageUrlFromApi()
+    {
+        $url = $this->ThumbnailURL;
+        if ($this->RequireSignedURLs) {
+            $token = CloudflareStreamHelper::getApiClient()->getSignedToken($this->UID);
+            $url = str_replace($this->UID, $token, $url);
+        }
+        return $url;
+    }
+
     public function getCMSFields()
     {
         // Somehow the video is deleted but the id is still set
@@ -310,12 +323,13 @@ class StreamVideoObject extends DataObject
 
         /** @var UploadField $poster */
         if ($poster = $fields->dataFieldByName('PosterImage')) {
+            $thumbnailUrl = $this->getPosterImageUrlFromApi();
             $poster->setAllowedFileCategories('image')
                 ->setFolderName(self::config()->poster_folder)
                 ->setAllowedMaxFileNumber(1)
                 ->setDescription($this->fieldLabel('PosterImage_descr'))
                 ->setRightTitle(
-                    $this->ThumbnailURL ? DBHTMLVarchar::create()->setValue("<img src=\"{$this->ThumbnailURL}\" style=\"width:auto;height:70px;margin-top:-.25rem;\" />") : ''
+                    $this->ThumbnailURL ? DBHTMLVarchar::create()->setValue("<img src=\"{$thumbnailUrl}\" style=\"width:auto;height:70px;margin-top:-.25rem;\" />") : ''
                 );
         }
 
@@ -639,6 +653,7 @@ class StreamVideoObject extends DataObject
         $heightToWidthFactor = $this->Height && $this->Width ? $this->Width / $this->Height : 16 / 9; // default to 16:9
         $posterURL = $this->PosterImageID ? Director::absoluteURL($this->PosterImage()->ScaleMaxHeight(360)->getURL()) : $this->ThumbnailURL;
         if ($posterURL) {
+            // https://developers.cloudflare.com/stream/viewing-videos/displaying-thumbnails#use-case-2-setting-the-default-thumbnail-timestamp-using-the-api
             $posterURL .= "?ts={$this->ThumbnailTimestamp}";
         }
         // When resulting SVG will be loaded in img tag, we need to convert the image to data-uri else it will not be loaded by browsers (security measure)
