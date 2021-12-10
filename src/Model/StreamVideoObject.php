@@ -13,6 +13,7 @@ use SilverStripe\Assets\File;
 use SilverStripe\Assets\Flysystem\ProtectedAssetAdapter;
 use SilverStripe\Assets\Image;
 use SilverStripe\Control\Director;
+use SilverStripe\Core\ClassInfo;
 use SilverStripe\Core\Config\Config;
 use SilverStripe\Core\Convert;
 use SilverStripe\Forms\FieldList;
@@ -32,6 +33,7 @@ use SilverStripe\ORM\FieldType\DBVarchar;
 use SilverStripe\Security\Permission;
 use SilverStripe\View\Requirements;
 use SilverStripe\View\SSViewer;
+use Symbiote\QueuedJobs\Jobs\ScheduledExecutionJob;
 
 /**
  * @property string $UID
@@ -118,7 +120,26 @@ class StreamVideoObject extends DataObject
      */
     private static $default_thumbnail_timestamp_pct = 0.1;
 
+    // Facilitate uploading as QueuedJob
+    public $ExecuteFree = 'never';
+    private function scheduleUploadJob($write = true)
+    {
+        if($this->StatusState || !ClassInfo::exists('Symbiote\QueuedJobs\Jobs\ScheduledExecutionJob')){
+            return false;
+        }
+        // using full namespaced classnames because qjobs module may not be installed (so we cannot use imports)
+        $qJobDescrID = singleton(\Symbiote\QueuedJobs\Services\QueuedJobService::class)->queueJob(
+            new \Symbiote\QueuedJobs\Jobs\ScheduledExecutionJob($this)
+        );
+        $this->StatusState = CloudflareStreamApiClient::STATUS_SCHEDULED;
+        if($write) $this->write(); // triggers double write because called from onAfterWrite but only once/when $this->StatusState is not yet set
 
+        return $qJobDescrID;
+    }
+    public function onScheduledExecution()
+    {
+        return $this->postLocalVideo();
+    }
 
     private static $db = [
         'UID' => DBVarchar::class . '(100)',
@@ -248,7 +269,6 @@ class StreamVideoObject extends DataObject
         if ((!$this->UID && !$this->VideoID) || $this->StatusState === CloudflareStreamApiClient::STATUS_SCHEDULED) {
             $fields = new FieldList();
             $fields->push(new TabSet("Root", $mainTab = new Tab("Main")));
-            //            $fields->addFieldToTab('Root.Main', $titleField);
             $fields->addFieldToTab('Root.Main', $nameField);
             $fields->addFieldToTab('Root.Main', $UIDField->setDescription($this->fieldLabel('AddExistingUID_descr')));
 
@@ -260,14 +280,12 @@ class StreamVideoObject extends DataObject
                     $Video->setChunkUploads(true);
                 } else {
                     $fields->push($Video = new UploadField("Video"));
-                    //                    $Video->setDescription();
                 }
                 $Video->setFolderName(self::config()->video_folder);
                 $Video->setAllowedMaxFileNumber(1);
                 $Video->getValidator()->setAllowedMaxFileSize(['*' => '1GB']);
                 // MP4, MKV, MOV, AVI, FLV, MPEG-2 TS, MPEG-2 PS, MXF, LXF, GXF, 3GP, WebM, MPG, QuickTime
                 // https://developers.cloudflare.com/stream/faq#what-input-file-formats-are-supported
-                //            $Video->getValidator()->setAllowedExtensions(['mp4']);
                 $Video->getValidator()->setAllowedExtensions(['mp4', 'mkv', 'mov', 'avi', 'flv', 'vob', 'mxf', 'lxf', 'gxf', '3gp', 'webm', 'mpg']);
                 $Video->setDescription(
                     'A video file of maximum ' . File::format_size($Video->getValidator()->getAllowedMaxFileSize())
@@ -311,7 +329,7 @@ class StreamVideoObject extends DataObject
                 if (Permission::check('ADMIN')) {
                     $fields->dataFieldByName('RequireSignedURLs')->setDescription(
                         $this->fieldLabel('SigningKeyMissing')
-                        . ' ' . $this->fieldLabel('SigningKeyAdminCreate')
+                            . ' ' . $this->fieldLabel('SigningKeyAdminCreate')
                     );
                 }
             }
@@ -433,7 +451,7 @@ class StreamVideoObject extends DataObject
         if ($this->VideoID && !$this->UID && !$this->StatusState) {
             $jobDescrID = null;
             // If using qjobs module, create job to upload this vid (sets status to 'scheduled')
-            if (self::config()->upload_from_qjob_if_available) {
+            if(self::config()->upload_from_qjob_if_available){
                 $jobDescrID = $this->scheduleUploadJob();
             }
             if (!$jobDescrID) {
@@ -451,9 +469,9 @@ class StreamVideoObject extends DataObject
         if ($this->UID) {
             $client = CloudflareStreamHelper::getApiClient();
             try {
-                switch (self::config()->get('stream_video_action_on_delete_record')) {
+                switch (self::config()->get('stream_video_action_on_delete_record')){
                     case 'mark':
-                        $client->setVideoMeta($this->UID, "name", 'DELETED: ' . $this->Name);
+                        $client->setVideoMeta($this->UID, "name", 'DELETED: '.$this->Name);
                         break;
                     case 'delete':
                         $client->deleteVideo($this->UID);
@@ -464,8 +482,8 @@ class StreamVideoObject extends DataObject
                 }
             } catch (\GuzzleHttp\Exception\ClientException $exception) {
                 // If 404, ignore (file was probably already deleted in CFStream
-                if ($exception->getCode() !== 404) {
-                    user_error('CFStream API ERROR: ' . $exception->getMessage());
+                if($exception->getCode()!==404) {
+                    user_error('CFStream API ERROR: '.$exception->getMessage());
                 }
             }
         }
@@ -475,41 +493,41 @@ class StreamVideoObject extends DataObject
         }
     }
 
-    //    // @TODO: Tweak this to show a 'pending'/status message or so as long as not yet available
-    //    public function forTemplate()
-    //    {
-    //        if (!$this->UID && !$this->VideoID) {
-    //            return;
-    //        }
-    //        if ($this->UID) {
-    //            return CloudflareStreamHelper::getApiClient()->embedCode($this->UID);
-    //        }
-    //
-    //        // 'temporary' local video file?
-    //        return '<video src=\"' . $this->Video()->getURL() . '\" />';
-    //    }
+//    // @TODO: Tweak this to show a 'pending'/status message or so as long as not yet available
+//    public function forTemplate()
+//    {
+//        if (!$this->UID && !$this->VideoID) {
+//            return;
+//        }
+//        if ($this->UID) {
+//            return CloudflareStreamHelper::getApiClient()->embedCode($this->UID);
+//        }
+//
+//        // 'temporary' local video file?
+//        return '<video src=\"' . $this->Video()->getURL() . '\" />';
+//    }
 
     //
     // HELPERS
     //
 
-    //    /**
-    //     * @param string $uid
-    //     * @return StreamVideoObject
-    //     */
-    //    public static function getByUID($uid)
-    //    {
-    //        return self::get()->filter('UID', $uid)->first();
-    //    }
+//    /**
+//     * @param string $uid
+//     * @return StreamVideoObject
+//     */
+//    public static function getByUID($uid)
+//    {
+//        return self::get()->filter('UID', $uid)->first();
+//    }
 
-    //    /**
-    //     * @param string $id
-    //     * @return StreamVideoObject
-    //     */
-    //    public static function getByID($id)
-    //    {
-    //        return self::get()->filter('ID', $id)->first();
-    //    }
+//    /**
+//     * @param string $id
+//     * @return StreamVideoObject
+//     */
+//    public static function getByID($id)
+//    {
+//        return self::get()->filter('ID', $id)->first();
+//    }
 
     // public syncronous method to be called from eg qjob, blocking further execution until POST/upload to API is done
     public function postLocalVideo()
@@ -517,14 +535,14 @@ class StreamVideoObject extends DataObject
         return $this->sendLocalVideo(true, true);
     }
 
-    protected function sendLocalVideo($write = true, $forcePOST = false)
+    protected function sendLocalVideo($write = true, $forcePOST=false)
     {
         if (!$this->VideoID) {
-            user_error(self::class . "::sendLocalVideo() - no video (VideoID) available for uploading to API.", E_USER_WARNING);
+            user_error(self::class."::sendLocalVideo() - no video (VideoID) available for uploading to API.", E_USER_WARNING);
             return false;
         }
         if ($this->UID) {
-            user_error(self::class . "::sendLocalVideo() - video already sent to API (UID set).", E_USER_WARNING);
+            user_error(self::class."::sendLocalVideo() - video already sent to API (UID set).", E_USER_WARNING);
             return false;
         }
         $client = CloudflareStreamHelper::getApiClient();
@@ -547,7 +565,7 @@ class StreamVideoObject extends DataObject
         // Else: try submitting a download link for the vid (which should hopefully return early and process the vid async)
         // Failing that, again fall back to POST'ing it anyway (blocking further execution until done)
         $uid = null;
-        if ($forcePOST) {
+        if($forcePOST){
             $uid = $client->upload($this->getVideoFullPath($localVideo));
         } else {
             try {
@@ -583,33 +601,25 @@ class StreamVideoObject extends DataObject
         return false;
     }
 
-    /**
-     * @return bool true if the data was refresh, false if not found
-     */
     public function refreshDataFromApi($write = true)
     {
         if (!$this->UID) {
-            return false;
+            return;
         }
 
         $client = CloudflareStreamHelper::getApiClient();
         try {
             $responseData = $client->videoDetails($this->UID);
         } catch (\GuzzleHttp\Exception\ClientException $exception) {
-            // If 404, just return (file was probably already deleted in CFStream)
-            if ($exception->getCode() === 404) {
-                // Remove uid
-                $this->UID = '';
-                return false;
-            }
-            user_error('CFStream API ERROR: ' . $exception->getMessage());
+            // If 404, just return (file was probably already deleted in CFStream
+            if($exception->getCode()===404) { return; }
+            user_error('CFStream API ERROR: '.$exception->getMessage());
         }
 
         $this->setDataFromApi($responseData->result);
         if ($write) {
             $this->write();
         }
-        return true;
     }
 
     //
@@ -653,23 +663,20 @@ class StreamVideoObject extends DataObject
 
     public function LocalLink()
     {
-        return Director::absoluteURL(StreamVideoAdminController::singleton()->Link('video_data') . '?ID=' . $this->ID);
+        return Director::absoluteURL(StreamVideoAdminController::singleton()->Link('video_data').'?ID=' . $this->ID);
     }
 
-    public function PreviewImageSvg($previewHeight = 36, $convertPosterToDataUri = false)
+    public function PreviewImageSvg($previewHeight = 36, $convertPosterToDataUri=false)
     {
         $heightToWidthFactor = $this->Height && $this->Width ? $this->Width / $this->Height : 16 / 9; // default to 16:9
-        $posterURL = $this->PosterImageID ? Director::absoluteURL($this->PosterImage()->ScaleMaxHeight(360)->getURL()) : $this->ThumbnailURL;
-        if ($posterURL) {
-            // https://developers.cloudflare.com/stream/viewing-videos/displaying-thumbnails#use-case-2-setting-the-default-thumbnail-timestamp-using-the-api
-            $posterURL .= "?ts={$this->ThumbnailTimestamp}";
-        }
+        $posterURL = $this->PosterImageID ? Director::absoluteURL( $this->PosterImage()->ScaleMaxHeight(360)->getURL() ) : $this->ThumbnailURL;
+        if($posterURL) $posterURL .= "?ts={$this->ThumbnailTimestamp}";
         // When resulting SVG will be loaded in img tag, we need to convert the image to data-uri else it will not be loaded by browsers (security measure)
-        if ($convertPosterToDataUri && filter_var(str_replace('_', '-', $posterURL), FILTER_VALIDATE_URL)) { // filter_var doesnt like _ in domains (eg during local development)
+        if($convertPosterToDataUri && filter_var(str_replace('_','-', $posterURL), FILTER_VALIDATE_URL)){ // filter_var doesnt like _ in domains (eg during local development)
             // mime_content_type doesnt like external files, falling back to a simpler map
-            //            $posterURL = 'data: '.mime_content_type($posterURL).';base64,'.base64_encode(file_get_contents($posterURL));
-            $mimetype = str_replace('jpg', 'jpeg', 'image/' . strtolower(substr($posterURL, -3)));
-            $posterURL = 'data: ' . $mimetype . ';base64,' . base64_encode(file_get_contents($posterURL));
+//            $posterURL = 'data: '.mime_content_type($posterURL).';base64,'.base64_encode(file_get_contents($posterURL));
+            $mimetype = str_replace('jpg', 'jpeg', 'image/'.strtolower(substr($posterURL, -3)));
+            $posterURL = 'data: '.$mimetype.';base64,'.base64_encode(file_get_contents($posterURL));
         }
         // Create data URI of image
         $posterDataUri = $posterURL;
@@ -736,7 +743,7 @@ class StreamVideoObject extends DataObject
 
         $this->UID = $record->uid;
         $this->ThumbnailURL = $record->thumbnail;
-        if (!$this->Name) {
+        if(!$this->Name) {
             $this->Name = $record->meta->name ?? '';
         }
         $this->Size = $record->size;
@@ -747,7 +754,7 @@ class StreamVideoObject extends DataObject
         $this->AllowedOrigins = implode("\n", $record->allowedOrigins);
         $this->Duration = $record->duration ?: null;
         $this->ThumbnailTimestampPct = $record->thumbnailTimestampPct;
-        if (!$this->ThumbnailTimestamp) {
+        if(!$this->ThumbnailTimestamp) {
             $this->ThumbnailTimestamp = $record->duration && $record->thumbnailTimestampPct ? $record->duration * $record->thumbnailTimestampPct : null;
         }
 

@@ -20,3 +20,10 @@ Shortcodable\Shortcodable:
   shortcodable_classes:
     - Restruct\SilverStripe\StreamVideo\Shortcodes\CloudflareStreamShortcode
 ---
+name: streamvideo_queuedjobs
+Only:
+  moduleexists: symbiote/silverstripe-queuedjobs
+---
+Restruct\SilverStripe\StreamVideo\Model:
+  upload_from_qjob_if_available: true
+---

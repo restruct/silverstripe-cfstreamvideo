@@ -9,8 +9,7 @@ use SilverStripe\Control\Controller;
 use SilverStripe\ORM\DB;
 use SilverStripe\Versioned\Versioned;
 
-class StreamVideoAdminController
-    extends Controller
+class StreamVideoAdminController extends Controller
 {
     private static $url_segment = 'admin/streamvideo';
 
@@ -123,7 +122,7 @@ TEXT;
         $client = CloudflareStreamHelper::getApiClient();
         $list = $client->listVideos();
         foreach ($list->result as $result) {
-            $record = StreamVideoObject::get()->filter('UID',$result->uid)->first();
+            $record = StreamVideoObject::get()->filter('UID', $result->uid)->first();
             $operation = "Updated";
             if (!$record) {
                 $record = new StreamVideoObject();
@@ -134,5 +133,4 @@ TEXT;
             DB::alteration_message("$operation record {$record->UID}");
         }
     }
-
 }
