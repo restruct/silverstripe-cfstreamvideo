@@ -21,6 +21,10 @@ In includes:
 - [x] A ShortCode + Placeholder are provided for easy inclusion of vids in the editor (also on 'regular' pages)
   - [x] The shortcode hooks into the yet to be published Restruct Shortcodable module
   - [x] The modal has a dropdown to select the video by title/name and checkboxes for options: show controls, autoplay, preload, start muted, p
+- [ ] Videos may be made available via OEmbed (https://oembed.com/ & https://timnash.co.uk/becoming-oembed-provider/)
+  - [ ] OEmbedding is by default limited to the current domain via a Config property (independent of video-whitelisted domains & countries)
+  - [ ] Additional allowed domains may be whitelisted in Config
+  - [ ] OEmbedding may also be configured to allow ANY domain (effectively disables whitelist/limiting alltogether)
 - [x] A ModelAdmin interface is included to view & edit existing vids, or upload new ones (without having to create a StreamVideoPage):
   - [x] Videos can be set to be 'protected' (require a [signed URL via Stream API](https://developers.cloudflare.com/stream/viewing-videos/securing-your-stream))
   - [x] Videos can have [whitelisted (only) domains & countries](https://developers.cloudflare.com/stream/viewing-videos/securing-your-stream#signed-urls), the default/current website domain is whitelisted by default if whitelisting is active
