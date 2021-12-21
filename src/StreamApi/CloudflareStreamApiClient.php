@@ -472,7 +472,11 @@ class CloudflareStreamApiClient
      */
     public function getVideoMeta($uid)
     {
-        return $this->videoDetails($uid)->meta;
+        $details = $this->videoDetails($uid);
+        if (isset($details->meta)) {
+            return $details->meta;
+        }
+        return [];
     }
 
     /**

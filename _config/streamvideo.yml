@@ -10,6 +10,7 @@ Name: streamvideo
 SilverStripe\Control\Director:
   rules:
     'admin/streamvideo': Restruct\SilverStripe\StreamVideo\Controllers\StreamVideoAdminController
+    'oembed/streamvideo': Restruct\SilverStripe\StreamVideo\Controllers\StreamOEmbedController
 
 ---
 name: streamvideo_shortcodables
