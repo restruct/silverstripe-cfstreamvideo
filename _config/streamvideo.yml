@@ -10,7 +10,8 @@ Name: streamvideo
 SilverStripe\Control\Director:
   rules:
     'admin/streamvideo': Restruct\SilverStripe\StreamVideo\Controllers\StreamVideoAdminController
-    'oembed/streamvideo': Restruct\SilverStripe\StreamVideo\Controllers\StreamOEmbedController
+    'streamvideo-embed': Restruct\SilverStripe\StreamVideo\Controllers\StreamOEmbedController
+
 
 ---
 name: streamvideo_shortcodables
@@ -20,11 +21,13 @@ Only:
 Shortcodable\Shortcodable:
   shortcodable_classes:
     - Restruct\SilverStripe\StreamVideo\Shortcodes\CloudflareStreamShortcode
+
+
 ---
 name: streamvideo_queuedjobs
 Only:
   moduleexists: symbiote/silverstripe-queuedjobs
 ---
-Restruct\SilverStripe\StreamVideo\Model:
+Restruct\SilverStripe\StreamVideo\Model\StreamVideoObject:
   upload_from_qjob_if_available: true
----
+

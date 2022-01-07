@@ -4,6 +4,7 @@ namespace Restruct\SilverStripe\StreamVideo\Model;
 
 use Exception;
 use LeKoala\FilePond\FilePondField;
+use Restruct\SilverStripe\StreamVideo\Controllers\StreamOEmbedController;
 use Restruct\SilverStripe\StreamVideo\Controllers\StreamVideoAdminController;
 use Restruct\SilverStripe\StreamVideo\Shortcodes\CloudflareStreamShortcode;
 use Restruct\SilverStripe\StreamVideo\StreamApi\CloudflareStreamApiClient;
@@ -16,6 +17,8 @@ use SilverStripe\Control\Director;
 use SilverStripe\Core\ClassInfo;
 use SilverStripe\Core\Config\Config;
 use SilverStripe\Core\Convert;
+use SilverStripe\Core\Environment;
+use SilverStripe\Core\Injector\Injector;
 use SilverStripe\Forms\FieldList;
 use SilverStripe\Forms\LiteralField;
 use SilverStripe\Forms\Tab;
@@ -31,6 +34,7 @@ use SilverStripe\ORM\FieldType\DBInt;
 use SilverStripe\ORM\FieldType\DBText;
 use SilverStripe\ORM\FieldType\DBVarchar;
 use SilverStripe\Security\Permission;
+use SilverStripe\View\Parsers\URLSegmentFilter;
 use SilverStripe\View\Requirements;
 use SilverStripe\View\SSViewer;
 use Symbiote\QueuedJobs\Jobs\ScheduledExecutionJob;
@@ -80,6 +84,7 @@ class StreamVideoObject extends DataObject
 
     /**
      * @config What to do with the video record in CFStream upon deleting the local record
+     * @note: May also be set as environment var (which overrides config) Environment::getEnv('APP_CFSTREAM_ACTION_ON_DELETE')
      * @var string options: keep = do nothing, rename = prepend 'DELETED: ' to video name, delete = remove in Stream right away
      */
     private static $stream_video_action_on_delete_record = 'mark';
@@ -268,6 +273,9 @@ class StreamVideoObject extends DataObject
         $UIDField = $fields->dataFieldByName('UID');
         $fields->dataFieldByName('ThumbnailTimestamp')->setDescription($this->fieldLabel('ThumbnailTimestamp_descr'));
 
+        // Situation where this is a NEW video or a video in the process of being uploaded
+        // Checks: NO UID (=video already on server) + NO VideoID (=local video) => NEW/empty video record
+        // OR: StatusState = STATUS_SCHEDULED => IN PROGRESS
         if ((!$this->UID && !$this->VideoID) || $this->StatusState === CloudflareStreamApiClient::STATUS_SCHEDULED) {
             $fields = new FieldList();
             $fields->push(new TabSet("Root", $mainTab = new Tab("Main")));
@@ -294,15 +302,28 @@ class StreamVideoObject extends DataObject
                         . ', most video file formats are supported (eg MP4, MKV, MOV, AVI, WebM, MPG, QuickTime, etc)'
                 );
             }
+
+        // else: EXISTING VID
         } else {
             if ($this->UID) {
-                $result = $this->refreshDataFromApi();
-                // Add warning
-                if (!$result) {
-                    $VideoDeletedMessage = _t(__CLASS__ . '.VideoDeletedMessage', 'The video was deleted on cloudflare servers. Save to remove UID.');
+                // refreshDataFromApi returns void but sets UID
+                $this->refreshDataFromApi();
+                // Check status a different way as refreshDataFromApi returns void and may (or may NOT) update UID etc if removed from CF (not sure)
+                if ($this->StatusState === CloudflareStreamApiClient::STATUS_ERROR) {
+                    $VideoDeletedMessage = _t(__CLASS__ . '.VideoDeletedMessage',
+                        'Received an error status from the video STREAM servers. Probably the video has been deleted and you may delete this local record as well.');
+                    if($this->VideoID && $this->Video()->exists()){
+                        $VideoDeletedMessage .= '<br>' . _t(__CLASS__ . '.VideoOrReUploadExistingMessage',
+                                'OR: save this record to (re-)upload the existing local video file to the STREAM server.');
+                        $fields->removeByName("Video");
+                    } else {
+                        $VideoDeletedMessage .= '<br>' . _t(__CLASS__ . '.VideoOrReUploadNewMessage',
+                                'OR: upload a new video file and save this record to recreate/replace on the STREAM server.');
+                    }
                     $fields->insertBefore("Name", new LiteralField("AlertVideoDeleted", '<div class="message bad">' . $VideoDeletedMessage . '</div>'));
+                } else {
+                    $fields->removeByName("Video");
                 }
-                $fields->removeByName("Video");
             }
             $techFields = [
                 "UID",
@@ -364,6 +385,15 @@ class StreamVideoObject extends DataObject
             $fields->addFieldToTab("Root.Main", LiteralField::create("ShortCodeInfo", $wrappedShortCode));
         }
 
+        if ($this->UID) {
+            $OEmbedURL = "<pre style=\"cursor:pointer;padding:1em;background:#fff\"
+                    onclick=\"copyToClipboard(this.innerText);jQuery.noticeAdd({text:'Copied to clipboard'})\"
+                >" . Director::absoluteURL( StreamOEmbedController::singleton()->Link("{$this->ID}/{$this->NameAsURLSegment()}") ) . "</pre>
+                <p><em>Video can also be embedded via the above OEmbed link (click on URL to copy to clipboard)</em></p>";
+            $wrappedOEmbedURL = '<div class="form-group field"><label class="form__field-label">OEmbed URL</label><div class="form__field-holder">' . $OEmbedURL . '</div></div>';
+            $fields->addFieldToTab("Root.Main", LiteralField::create("OEmbedURLInfo", $wrappedOEmbedURL));
+        }
+
         if ($this->UID && $this->StatusState === CloudflareStreamApiClient::STATUS_READY) {
             $ratio = $this->Height / $this->Width * 100;
             $vidPlayer = CloudflareStreamHelper::getApiClient()->iframePlayer($this->UID, [], $this->RequireSignedURLs, $ratio, self::config()->signed_buffer_seconds);
@@ -382,6 +412,11 @@ class StreamVideoObject extends DataObject
         }
 
         return $fields;
+    }
+
+    public function NameAsURLSegment()
+    {
+        return URLSegmentFilter::singleton()->filter($this->Name);
     }
 
     public function validate()
@@ -417,7 +452,7 @@ class StreamVideoObject extends DataObject
             // Update video details from our fields
             $changed = $this->getChangedFields(true, self::CHANGE_VALUE);
             if (!empty($changed) || empty($vidMeta['name'])) {
-                if (isset($changed['Name']) || empty($vidMeta['name'])) {
+                if (isset($changed['Name']) || empty($vidMeta['name']) && !empty($this->Name)) {
                     $client->setVideoMeta($this->UID, "name", $this->Name);
                 }
                 if (isset($changed['RequireSignedURLs'])) {
@@ -450,7 +485,7 @@ class StreamVideoObject extends DataObject
         parent::onAfterWrite();
 
         // If not already scheduled for uploading from onBeforeWrite, send to api now (possibly blocking further execution until done)
-        if ($this->VideoID && !$this->UID && !$this->StatusState) {
+        if ($this->VideoID && !$this->UID && (!$this->StatusState || $this->StatusState === CloudflareStreamApiClient::STATUS_ERROR)) {
             $jobDescrID = null;
             // If using qjobs module, create job to upload this vid (sets status to 'scheduled')
             if (self::config()->upload_from_qjob_if_available) {
@@ -471,7 +506,8 @@ class StreamVideoObject extends DataObject
         if ($this->UID) {
             $client = CloudflareStreamHelper::getApiClient();
             try {
-                switch (self::config()->get('stream_video_action_on_delete_record')) {
+                $onDeleteAction = Environment::getEnv('APP_CFSTREAM_ACTION_ON_DELETE') ?: self::config()->get('stream_video_action_on_delete_record');
+                switch ($onDeleteAction) {
                     case 'mark':
                         $client->setVideoMeta($this->UID, "name", 'DELETED: ' . $this->Name);
                         break;
@@ -613,6 +649,12 @@ class StreamVideoObject extends DataObject
         return false;
     }
 
+    /**
+     * Update/sync from API
+     * @param bool $write
+     * @throws \SilverStripe\ORM\ValidationException
+     * @return void
+     */
     public function refreshDataFromApi($write = true)
     {
         if (!$this->UID) {
@@ -623,14 +665,17 @@ class StreamVideoObject extends DataObject
         try {
             $responseData = $client->videoDetails($this->UID);
         } catch (\GuzzleHttp\Exception\ClientException $exception) {
-            // If 404, just return (file was probably already deleted in CFStream
+            // If 404, file was probably deleted in CFStream
             if ($exception->getCode() === 404) {
+                $this->StatusState = CloudflareStreamApiClient::STATUS_ERROR;
+                $this->UID = null;
                 return;
             }
             user_error('CFStream API ERROR: ' . $exception->getMessage());
         }
 
         $this->setDataFromApi($responseData->result);
+
         if ($write) {
             $this->write();
         }
@@ -753,47 +798,47 @@ HTML;
 
     public function setDataFromApi($record)
     {
-        // Sample record
-        // {
-        //     "uid": "3d96d64e6eda7c2356349axxxxxxxxxx",
-        //     "thumbnail": "https://videodelivery.net/3d96d64e6eda7c2356349axxxxxxxxxx/thumbnails/thumbnail.jpg",
-        //     "thumbnailTimestampPct": 0,
-        //     "readyToStream": true, // or false
-        //     "status": {
-        //       "state": "ready", // or "downloading"
-        //       "pctComplete": "100.000000"
-        //     },
-        //     "meta": {
-        //       "filename": "name_of_the_video.mp4",
-        //       "filetype": "video/mp4",
-        //       "name": "Name of the video",
-        //       "relativePath": "null",
-        //       "type": "video/mp4",
-        //       "downloaded-from": "https://domain.tld/video.mp4"
-        //     },
-        //     "created": "2021-06-15T09:14:50.898834Z",
-        //     "modified": "2021-06-15T09:32:37.122475Z",
-        //     "size": 52151551,
-        //     "preview": "https://watch.videodelivery.net/3d96d64e6eda7c2356349axxxxxxxxxx",
-        //     "allowedOrigins": [
-        //       "hartlongcentrum.nl"
-        //     ],
-        //     "requireSignedURLs": false,
-        //     "uploaded": "2021-06-15T09:14:50.898826Z",
-        //     "uploadExpiry": "2021-06-16T09:14:50.898817Z",
-        //     "maxSizeBytes": null,
-        //     "maxDurationSeconds": null,
-        //     "duration": 133.9, // -1 if not processed
-        //     "input": {
-        //       "width": 1920, // -1 if not processed
-        //       "height": 1080 // -1 if not processed
-        //     },
-        //     "playback": {
-        //       "hls": "https://videodelivery.net/3d96d64e6eda7c2356349axxxxxxxxxx/manifest/video.m3u8",
-        //       "dash": "https://videodelivery.net/3d96d64e6eda7c2356349axxxxxxxxxx/manifest/video.mpd"
-        //     },
-        //     "watermark": null
-        //   }
+        // Sample record ( just the "result" part is received as $record var from refreshDataFromApi() )
+        //{
+        //    "result": {
+        //        "uid": "6a0123ec6919c0fea975f53dcb920c8c",
+        //        "thumbnail": "https:\/\/videodelivery.net\/6a0123ec6919c0fea975f53dcb920c8c\/thumbnails\/thumbnail.jpg",
+        //        "thumbnailTimestampPct": 0,
+        //        "readyToStream": true,
+        //        "status": {
+        //            "state": "ready",
+        //            "pctComplete": "100.000000",
+        //            "errorReasonCode": "",
+        //            "errorReasonText": ""
+        //        },
+        //        "meta": {
+        //            "name": ""
+        //        },
+        //        "created": "2021-12-10T05:42:34.080544Z",
+        //        "modified": "2022-01-07T10:35:13.476383Z",
+        //        "size": 40715633,
+        //        "preview": "https:\/\/watch.videodelivery.net\/6a0123ec6919c0fea975f53dcb920c8c",
+        //        "allowedOrigins": [],
+        //        "requireSignedURLs": false,
+        //        "uploaded": "2021-12-10T05:42:34.080483Z",
+        //        "uploadExpiry": "2021-12-11T05:42:34.080477Z",
+        //        "maxSizeBytes": null,
+        //        "maxDurationSeconds": null,
+        //        "duration": 295.2,
+        //        "input": {
+        //            "width": 1280,
+        //            "height": 720
+        //        },
+        //        "playback": {
+        //            "hls": "https:\/\/videodelivery.net\/6a0123ec6919c0fea975f53dcb920c8c\/manifest\/video.m3u8",
+        //            "dash": "https:\/\/videodelivery.net\/6a0123ec6919c0fea975f53dcb920c8c\/manifest\/video.mpd"
+        //        },
+        //        "watermark": null
+        //    },
+        //    "success": true,
+        //    "errors": [],
+        //    "messages": []
+        //}
 
         $this->UID = $record->uid;
         $this->ThumbnailURL = $record->thumbnail;
