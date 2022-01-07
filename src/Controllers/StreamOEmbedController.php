@@ -91,7 +91,7 @@ class StreamOEmbedController extends Controller
 
         $response = new HTTPResponse();
         $response->addHeader("Content-Type", "application/json");
-        $response->setBody(json_encode($arr, JSON_PRETTY_PRINT));
+        $response->setBody(json_encode($arr, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
         return $response;
     }

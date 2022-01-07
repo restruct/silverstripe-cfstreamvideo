@@ -385,7 +385,7 @@ class StreamVideoObject extends DataObject
             $fields->addFieldToTab("Root.Main", LiteralField::create("ShortCodeInfo", $wrappedShortCode));
         }
 
-        if ($this->UID) {
+        if ($this->UID && !$this->RequireSignedURLs) {
             $OEmbedURL = "<pre style=\"cursor:pointer;padding:1em;background:#fff\"
                     onclick=\"copyToClipboard(this.innerText);jQuery.noticeAdd({text:'Copied to clipboard'})\"
                 >" . Director::absoluteURL( StreamOEmbedController::singleton()->Link("{$this->ID}/{$this->NameAsURLSegment()}") ) . "</pre>
