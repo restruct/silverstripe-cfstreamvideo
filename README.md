@@ -5,7 +5,7 @@ Silverstripe CloudFlareStream video streaming module
 
 In includes: 
 - [x] A DB StreamVideo object to hold video data & settings, and keep track of the status
-- [ ] A StreamVideoPage object providing an upload interface (using FilePond)
+- [ ] ~~A StreamVideoPage object providing an upload interface (using FilePond)~~
 - [x] A StreamVideoAdminController to handle interactions in the admin section (like API interactions, providing shortcode placeholder, etc)
 - Configurable options (on StreamVideoAdminController) / environment options:
   - [x] (ENV) APP_CFSTREAM_API_HOST, APP_CFSTREAM_ACCOUNT_ID, APP_CFSTREAM_ACCOUNT_EMAIL, APP_CFSTREAM_API_TOKEN
@@ -25,11 +25,11 @@ In includes:
   - [x] Videos can be set to be 'protected' (require a [signed URL via Stream API](https://developers.cloudflare.com/stream/viewing-videos/securing-your-stream))
   - [x] Videos can have [whitelisted (only) domains & countries](https://developers.cloudflare.com/stream/viewing-videos/securing-your-stream#signed-urls), the default/current website domain is whitelisted by default if whitelisting is active
   - [x] The initial version allows setting/uploading a custom poster image for a video (overriding the one provided by Stream API)
-  - [ ] A later version of this module provides could allow managing signing keys from model admin (using the Stream API)
-  - [ ] A later version of this module provides some way/Ui to change/select the poster image (via a Stream API call)
+  - [x] A later version of this module provides could allow managing signing keys from model admin (using the Stream API)
+  - [x] A later version of this module provides some way/Ui to change/select the poster image (via a Stream API call)
 - [x] Prevent video downloading identical to [this WP module](https://cfpowertools.com/article/cloudflare-stream-wordpress-plugin-for-video-protection/) ([under the hood explanation](https://cfpowertools.com/article/cloudflare-stream-video-protection-wordpress-plugin-in-action/))
-##### OEmbed
-- [ ] Videos may be made available via OEmbed (https://oembed.com/ & https://timnash.co.uk/becoming-oembed-provider/)
+##### OEmbed (https://oembed.com/ & https://timnash.co.uk/becoming-oembed-provider/)
+- [x] Videos may be made available via OEmbed (currently all of them are, except probably for ones marked as requiring signed URLs)
   - [ ] OEmbedding is by default limited to the current domain via a Config property (independent of video-whitelisted domains & countries)
   - [ ] Additional allowed domains may be whitelisted in Config
   - [ ] OEmbedding may also be configured to allow ANY domain (effectively disables whitelist/limiting alltogether)
