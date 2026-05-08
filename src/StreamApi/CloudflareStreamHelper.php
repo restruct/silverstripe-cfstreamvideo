@@ -79,7 +79,7 @@ class CloudflareStreamHelper
                 self::$client->setEmail(self::getAccountEmail());
             }
             if (self::getApiKey()) {
-                self::$client->setEmail(self::getApiKey());
+                self::$client->setKey(self::getApiKey());
             }
             if (self::getLimitOrigins()) {
                 if (is_bool(self::getLimitOrigins())) {

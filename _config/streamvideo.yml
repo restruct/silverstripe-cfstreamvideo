@@ -10,18 +10,6 @@ Name: streamvideo
 SilverStripe\Control\Director:
   rules:
     'admin/streamvideo': Restruct\SilverStripe\StreamVideo\Controllers\StreamVideoAdminController
-    'streamvideo-embed': Restruct\SilverStripe\StreamVideo\Controllers\StreamOEmbedController
-
-
----
-name: streamvideo_shortcodables
-Only:
-  classexists: Shortcodable\Shortcodable
----
-Shortcodable\Shortcodable:
-  shortcodable_classes:
-    - Restruct\SilverStripe\StreamVideo\Shortcodes\CloudflareStreamShortcode
-
 
 ---
 name: streamvideo_queuedjobs

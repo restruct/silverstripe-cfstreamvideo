@@ -3,10 +3,7 @@
 namespace Restruct\SilverStripe\StreamVideo\Model;
 
 use Exception;
-use LeKoala\FilePond\FilePondField;
-use Restruct\SilverStripe\StreamVideo\Controllers\StreamOEmbedController;
 use Restruct\SilverStripe\StreamVideo\Controllers\StreamVideoAdminController;
-use Restruct\SilverStripe\StreamVideo\Shortcodes\CloudflareStreamShortcode;
 use Restruct\SilverStripe\StreamVideo\StreamApi\CloudflareStreamApiClient;
 use Restruct\SilverStripe\StreamVideo\StreamApi\CloudflareStreamHelper;
 use SilverStripe\AssetAdmin\Forms\UploadField;
@@ -16,9 +13,7 @@ use SilverStripe\Assets\Image;
 use SilverStripe\Control\Director;
 use SilverStripe\Core\ClassInfo;
 use SilverStripe\Core\Config\Config;
-use SilverStripe\Core\Convert;
 use SilverStripe\Core\Environment;
-use SilverStripe\Core\Injector\Injector;
 use SilverStripe\Forms\FieldList;
 use SilverStripe\Forms\LiteralField;
 use SilverStripe\Forms\Tab;
@@ -28,7 +23,6 @@ use SilverStripe\ORM\FieldType\DBBoolean;
 use SilverStripe\ORM\FieldType\DBDecimal;
 use SilverStripe\ORM\FieldType\DBEnum;
 use SilverStripe\ORM\FieldType\DBFloat;
-use SilverStripe\ORM\FieldType\DBHTMLText;
 use SilverStripe\ORM\FieldType\DBHTMLVarchar;
 use SilverStripe\ORM\FieldType\DBInt;
 use SilverStripe\ORM\FieldType\DBText;
@@ -36,8 +30,6 @@ use SilverStripe\ORM\FieldType\DBVarchar;
 use SilverStripe\Security\Permission;
 use SilverStripe\View\Parsers\URLSegmentFilter;
 use SilverStripe\View\Requirements;
-use SilverStripe\View\SSViewer;
-use Symbiote\QueuedJobs\Jobs\ScheduledExecutionJob;
 
 /**
  * @property string $UID
@@ -125,29 +117,6 @@ class StreamVideoObject extends DataObject
      */
     private static $default_thumbnail_timestamp_pct = 0.1;
 
-    // Facilitate uploading as QueuedJob
-    public $ExecuteFree = 'never';
-    private function scheduleUploadJob($write = true)
-    {
-        if ($this->StatusState || !ClassInfo::exists('Symbiote\QueuedJobs\Jobs\ScheduledExecutionJob')) {
-            return false;
-        }
-        // using full namespaced classnames because qjobs module may not be installed (so we cannot use imports)
-        $qJobDescrID = singleton(\Symbiote\QueuedJobs\Services\QueuedJobService::class)->queueJob(
-            new \Symbiote\QueuedJobs\Jobs\ScheduledExecutionJob($this)
-        );
-        $this->StatusState = CloudflareStreamApiClient::STATUS_SCHEDULED;
-        if ($write) {
-            $this->write(); // triggers double write because called from onAfterWrite but only once/when $this->StatusState is not yet set
-        }
-
-        return $qJobDescrID;
-    }
-    public function onScheduledExecution()
-    {
-        return $this->postLocalVideo();
-    }
-
     private static $db = [
         'UID' => DBVarchar::class . '(100)',
         'Name' => DBVarchar::class . '(200)',
@@ -232,16 +201,6 @@ class StreamVideoObject extends DataObject
                 'Video' => _t(__CLASS__ . '.Video', 'Video source'),
                 'PosterImage' => _t(__CLASS__ . '.PosterImage', 'Custom video preview image'),
                 'PosterImage_descr' => _t(__CLASS__ . '.PosterImage_descr', '(Default image shown next to upload-field) '),
-                // Some shortcodable form labels
-                "sc_video" => _t(__CLASS__ . '.sc_video', "Select video"),
-                "sc_hide_controls" => _t(__CLASS__ . '.sc_hide_controls', "Hide play/pause controls"),
-                "sc_autoplay" => _t(__CLASS__ . '.sc_autoplay', "Start playing automatically"),
-                "sc_loop" => _t(__CLASS__ . '.sc_loop', "Loop this video"),
-                "sc_muted" => _t(__CLASS__ . '.sc_muted', "Mute audio initially"),
-                "sc_preload" => _t(__CLASS__ . '.sc_preload', "Suggest preload"),
-                'sc_preload_none' => _t(__CLASS__ . '.sc_preload_none', "Let browser decide (default)"),
-                'sc_preload_metadata' => _t(__CLASS__ . '.sc_preload_metadata', "Prepare/preload only metadata"),
-                'sc_preload_auto' => _t(__CLASS__ . '.sc_preload_auto', "Preload the beginning of the video"),
             ]
         );
     }
@@ -283,19 +242,12 @@ class StreamVideoObject extends DataObject
             $fields->addFieldToTab('Root.Main', $UIDField->setDescription($this->fieldLabel('AddExistingUID_descr')));
 
             if (!$this->StatusState) {
-                if (class_exists(FilePondField::class)) {
-                    $fields->push($Video = new FilePondField("Video"));
-                    // @TODO: temp bugfix in FilePond, we need to also set maxFileSize manually for JS config (besides setAllowedMaxFileSize)
-                    $Video->addFilePondConfig('maxFileSize', Convert::memstring2bytes('1GB'));
-                    $Video->setChunkUploads(true);
-                } else {
-                    $fields->push($Video = new UploadField("Video"));
-                }
+                $fields->push($Video = new UploadField("Video"));
                 $Video->setFolderName(self::config()->video_folder);
                 $Video->setAllowedMaxFileNumber(1);
                 $Video->getValidator()->setAllowedMaxFileSize(['*' => '1GB']);
-                // MP4, MKV, MOV, AVI, FLV, MPEG-2 TS, MPEG-2 PS, MXF, LXF, GXF, 3GP, WebM, MPG, QuickTime
-                // https://developers.cloudflare.com/stream/faq#what-input-file-formats-are-supported
+                # MP4, MKV, MOV, AVI, FLV, MPEG-2 TS, MPEG-2 PS, MXF, LXF, GXF, 3GP, WebM, MPG, QuickTime
+                # https://developers.cloudflare.com/stream/faq#what-input-file-formats-are-supported
                 $Video->getValidator()->setAllowedExtensions(['mp4', 'mkv', 'mov', 'avi', 'flv', 'vob', 'mxf', 'lxf', 'gxf', '3gp', 'webm', 'mpg']);
                 $Video->setDescription(
                     'A video file of maximum ' . File::format_size($Video->getValidator()->getAllowedMaxFileSize())
@@ -376,25 +328,7 @@ class StreamVideoObject extends DataObject
                 );
         }
 
-        if ($this->UID) {
-            $ShortCode = "<pre style=\"cursor:pointer;padding:1em;background:#fff\"
-                    onclick=\"copyToClipboard(this.innerText);jQuery.noticeAdd({text:'Copied to clipboard'})\"
-                >[" . Config::inst()->get(CloudflareStreamShortcode::class, 'shortcode') . " id={$this->ID}]</pre>
-                <p><em>Click on shortcode to copy to clipboard</em></p>";
-            $wrappedShortCode = '<div class="form-group field"><label class="form__field-label">Shortcode</label><div class="form__field-holder">' . $ShortCode . '</div></div>';
-            $fields->addFieldToTab("Root.Main", LiteralField::create("ShortCodeInfo", $wrappedShortCode));
-        }
-
-        if ($this->UID && !$this->RequireSignedURLs) {
-            $OEmbedURL = "<pre style=\"cursor:pointer;padding:1em;background:#fff\"
-                    onclick=\"copyToClipboard(this.innerText);jQuery.noticeAdd({text:'Copied to clipboard'})\"
-                >" . Director::absoluteURL( StreamOEmbedController::singleton()->Link("{$this->ID}/{$this->NameAsURLSegment()}") ) . "</pre>
-                <p><em>Video can also be embedded via the above OEmbed link (click on URL to copy to clipboard)</em></p>";
-            $wrappedOEmbedURL = '<div class="form-group field"><label class="form__field-label">OEmbed URL</label><div class="form__field-holder">' . $OEmbedURL . '</div></div>';
-            $fields->addFieldToTab("Root.Main", LiteralField::create("OEmbedURLInfo", $wrappedOEmbedURL));
-        }
-
-        if ($this->UID && $this->StatusState === CloudflareStreamApiClient::STATUS_READY) {
+        if ($this->UID && $this->StatusState === CloudflareStreamApiClient::STATUS_READY && $this->Width && $this->Height) {
             $ratio = $this->Height / $this->Width * 100;
             $vidPlayer = CloudflareStreamHelper::getApiClient()->iframePlayer($this->UID, [], $this->RequireSignedURLs, $ratio, self::config()->signed_buffer_seconds);
             $vidWidth = 260 * (1 / $this->Height * $this->Width);
@@ -553,6 +487,67 @@ class StreamVideoObject extends DataObject
             return CloudflareStreamHelper::getApiClient()->embedCode($this->UID);
         }
         return null;
+    }
+
+    /**
+     * Returns an iframe HTML string for embedding the Cloudflare Stream video player.
+     *
+     * @param array $options Supported keys: width, height, autoplay, muted, loop, controls
+     * @return string HTML iframe embed code, or empty string if no UID
+     */
+    public function getPlayerIframeHTML(array $options = []): string
+    {
+        if (!$this->UID) {
+            return '';
+        }
+
+        $width = $options['width'] ?? '100%';
+        $height = $options['height'] ?? '100%';
+        $autoplay = !empty($options['autoplay']) ? 'true' : 'false';
+        $muted = !empty($options['muted']) ? 'true' : 'false';
+        $loop = !empty($options['loop']) ? 'true' : 'false';
+        # Controls default to true unless explicitly set to false
+        $controls = (isset($options['controls']) && $options['controls'] === false) ? 'false' : 'true';
+
+        # Use signed token if required
+        $videoId = $this->UID;
+        if ($this->RequireSignedURLs) {
+            $addBufferSeconds = (int) self::config()->signed_buffer_seconds;
+            $videoId = CloudflareStreamHelper::getApiClient()->getSignedToken($this->UID, $addBufferSeconds);
+        }
+
+        # Build player option query string
+        $params = http_build_query([
+            'autoplay' => $autoplay,
+            'muted' => $muted,
+            'loop' => $loop,
+            'controls' => $controls,
+        ]);
+
+        # Determine width/height style values (add 'px' for numeric values)
+        $widthStyle = is_numeric($width) ? "{$width}px" : $width;
+        $heightStyle = is_numeric($height) ? "{$height}px" : $height;
+
+        # Responsive wrapper: use padding-top aspect ratio trick when width is 100%
+        if ($width === '100%' && $this->Width && $this->Height) {
+            $ratio = $this->Height / $this->Width * 100;
+            return '<div style="position:relative; padding-top:' . $ratio . '%;">'
+                . '<iframe'
+                . ' src="https://iframe.videodelivery.net/' . $videoId . '?' . $params . '"'
+                . ' style="border:none; position:absolute; top:0; left:0; width:100%; height:100%;"'
+                . ' allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"'
+                . ' allowfullscreen'
+                . '></iframe>'
+                . '</div>';
+        }
+
+        return '<iframe'
+            . ' src="https://iframe.videodelivery.net/' . $videoId . '?' . $params . '"'
+            . ' width="' . $widthStyle . '" height="' . $heightStyle . '"'
+            . ' style="border:none;"'
+            . ' allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"'
+            . ' allowfullscreen'
+            . '></iframe>';
     }
 
     //
@@ -723,29 +718,6 @@ class StreamVideoObject extends DataObject
     public function LocalLink()
     {
         return Director::absoluteURL(StreamVideoAdminController::singleton()->Link('video_data') . '?ID=' . $this->ID);
-    }
-
-    public function OEmbedLink()
-    {
-        return Director::absoluteURL('oembed/streamvideo?ID=' . $this->ID);
-    }
-
-    /**
-     * This can be used like so in a given page
-     * public function MetaTags($includeTitle = true) {
-     *   return parent::MetaTags($includeTitle) . "\n" . $this->Video()->OEmbedLinkElement();
-     * }
-     */
-    public function OEmbedLinkElement()
-    {
-        $href = $this->OEmbedLink();
-        $title = $this->Title;
-        $html = <<<HTML
-<link rel="alternate" type="application/json+oembed"
-    href="$href"
-    title="$title" />
-HTML;
-        return $html;
     }
 
     public function PosterImageUrl()

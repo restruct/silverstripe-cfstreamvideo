@@ -231,7 +231,7 @@ class CloudflareStreamApiClient
                     $options["body"] = $data;
                 }
             } else {
-                $endpoint .= "?" . http_build_query($endpoint);
+                $endpoint .= "?" . http_build_query($data);
             }
         }
 
@@ -763,10 +763,13 @@ HTML;
         }
 
         $key = base64_decode($this->privateKeyPem);
-        return JWT::encode([
-            'kid' => $this->privateKeyId,
+        $payload = [
             'sub' => $uid,
-            "exp" => time() + $addBufferSeconds
-        ], $key, 'RS256');
+            'kid' => $this->privateKeyId,
+            'exp' => time() + $addBufferSeconds,
+        ];
+
+        # firebase/php-jwt v6 added a $keyId parameter; pass it so kid appears in the JWT header
+        return JWT::encode($payload, $key, 'RS256', $this->privateKeyId);
     }
 }

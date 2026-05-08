@@ -23,7 +23,7 @@ class StreamVideoAdminController extends Controller
         'refresh_video_statuses' => 'CMS_ACCESS_LeftAndMain',
         'verify_token' => 'CMS_ACCESS_LeftAndMain',
         'generate_signing_key' => 'ADMIN',
-        'shortcodePlaceHolder' => 'CMS_ACCESS_LeftAndMain',
+        # Protected by HMAC token generated in sendLocalVideo() — not publicly accessible
         'video_data' => true,
     ];
 
@@ -51,7 +51,7 @@ class StreamVideoAdminController extends Controller
 
         // Send video data through as stream
         $LocalVideo = $StreamVideo->Video();
-        if (!$LocalVideo && !$LocalVideo->ID) {
+        if (!$LocalVideo || !$LocalVideo->ID) {
             return $this->httpError(404, "No video");
         }
         $stream = $LocalVideo->getStream();
