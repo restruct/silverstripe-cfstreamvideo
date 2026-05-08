@@ -393,6 +393,38 @@ class CloudflareStreamApiClient
     }
 
     /**
+     * Create a direct creator upload URL for browser-to-CF TUS uploads.
+     * The returned URL can be used by the browser to upload directly to CF Stream.
+     *
+     * @link https://developers.cloudflare.com/stream/uploading-videos/direct-creator-uploads/
+     * @param int $maxDurationSeconds Max video duration allowed (default: 3600 = 1hr)
+     * @return string The TUS upload URL for browser use
+     */
+    public function createDirectUploadUrl(int $maxDurationSeconds = 3600): string
+    {
+        $headers = [
+            'Content-Length' => 0,
+            'Tus-Resumable' => '1.0.0',
+            'Upload-Length' => 0,  // Unknown at creation time
+            'Upload-Metadata' => 'maxDurationSeconds ' . base64_encode((string) $maxDurationSeconds),
+        ];
+        $headers = $this->getHeadersWithAuth($headers);
+
+        $endpoint = "accounts/{$this->accountId}/stream?direct_user=true";
+        $uri = self::API_BASE_URL . $endpoint;
+        $response = $this->client->post($uri, [
+            'headers' => $headers,
+        ]);
+
+        if (201 != $response->getStatusCode()) {
+            throw new \Exception("Failed to create direct upload URL");
+        }
+
+        // The upload URL is in the Location header
+        return $response->getHeader('Location')[0] ?? '';
+    }
+
+    /**
      * Create a resource on Cloudflare Stream from a url
      *
      * @link https://developers.cloudflare.com/stream/uploading-videos/upload-via-link

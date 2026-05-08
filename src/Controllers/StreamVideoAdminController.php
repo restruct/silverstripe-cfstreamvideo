@@ -23,6 +23,7 @@ class StreamVideoAdminController extends Controller
         'refresh_video_statuses' => 'CMS_ACCESS_LeftAndMain',
         'verify_token' => 'CMS_ACCESS_LeftAndMain',
         'generate_signing_key' => 'ADMIN',
+        'create_upload_url' => 'CMS_ACCESS_LeftAndMain',
         # Protected by HMAC token generated in sendLocalVideo() — not publicly accessible
         'video_data' => true,
     ];
@@ -115,6 +116,26 @@ TEXT;
         echo "<br><br><br>Info:<br>";
         print_r($result);
         die();
+    }
+
+    /**
+     * Create a direct upload URL for browser-to-CF TUS upload.
+     * Called via AJAX from the CMS form field.
+     */
+    public function create_upload_url()
+    {
+        $client = CloudflareStreamHelper::getApiClient();
+        $maxDuration = (int) ($this->getRequest()->getVar('maxDuration') ?: 3600);
+
+        try {
+            $uploadUrl = $client->createDirectUploadUrl($maxDuration);
+            $response = $this->getResponse();
+            $response->addHeader('Content-Type', 'application/json');
+            $response->setBody(json_encode(['uploadUrl' => $uploadUrl]));
+            return $response;
+        } catch (\Exception $e) {
+            return $this->httpError(500, $e->getMessage());
+        }
     }
 
     public function sync_from_api()
